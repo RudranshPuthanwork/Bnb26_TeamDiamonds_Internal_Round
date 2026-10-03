@@ -1,0 +1,1 @@
+D4 gap: one dispute per epoch vault-wide (stricter than per-guardian; a re-dispute would move disputedAt and un-override). DisputeOverridden is declared but not emitted (override is lazy; no tx to emit from). Armed = quorum reached before silence.
