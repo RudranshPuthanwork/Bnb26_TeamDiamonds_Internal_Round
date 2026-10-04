@@ -1,0 +1,82 @@
+.fieldGroup {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: var(--space-4);
+  row-gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  width: 100%;
+}
+
+.labelCol {
+  grid-column: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.accessionRef {
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+}
+
+.inputCol {
+  grid-column: 3 / -1;
+  display: flex;
+  flex-direction: column;
+}
+
+.input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--color-ink);
+  background-color: transparent;
+  padding: var(--space-2) 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--color-ink);
+  border-radius: var(--radius);
+}
+
+.input:hover {
+  border-bottom-width: 2px;
+}
+
+.input:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
+}
+
+.errorBox {
+  margin-top: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-error);
+  color: var(--color-error);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+}
+
+.errorText {
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.fixText {
+  color: var(--color-error);
+}
+
+@media (max-width: 768px) {
+  .labelCol {
+    grid-column: 1 / -1;
+  }
+  .inputCol {
+    grid-column: 1 / -1;
+  }
+}

@@ -1,0 +1,27 @@
+.errorBox {
+  border-left: 3px solid var(--color-error);
+  padding: var(--space-3) 0 var(--space-3) var(--space-4);
+  margin: var(--space-6) 0;
+  color: var(--color-error);
+  background-color: transparent;
+}
+
+.message {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  max-width: var(--measure-body);
+}
+
+.fix {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--color-error);
+  max-width: var(--measure-body);
+  margin-bottom: var(--space-3);
+}
+
+.action {
+  margin-top: var(--space-3);
+}

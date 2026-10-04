@@ -1,0 +1,13 @@
+.single {
+  border: none;
+  border-top: 1px solid var(--color-rule);
+  margin: var(--space-4) 0;
+  width: 100%;
+}
+
+.double {
+  border: none;
+  border-top: 3px double var(--color-ink);
+  margin: var(--space-4) 0;
+  width: 100%;
+}

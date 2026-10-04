@@ -1,0 +1,30 @@
+.container {
+  margin: var(--space-6) 0;
+  width: 100%;
+}
+
+.label {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+  margin-bottom: var(--space-1);
+  max-width: var(--measure-body);
+}
+
+.value {
+  font-family: var(--font-display);
+  font-size: clamp(4rem, 9vw, 7.5rem);
+  font-weight: 400;
+  line-height: 0.9;
+  letter-spacing: var(--letter-spacing-headline);
+  color: var(--color-ink);
+  white-space: nowrap;
+}
+
+.note {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--color-ink-secondary);
+  margin-top: var(--space-3);
+  max-width: var(--measure-body);
+}

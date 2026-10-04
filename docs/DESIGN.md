@@ -52,3 +52,13 @@ Behavior: visible :focus-visible, loading/empty/error states, prefers-reduced-mo
 
 ## Final audit (silent, fix, then output)
 Does it look like a default template? More than 2 icons or 1 gradient? Centered-everything, equal-card rows, filler words? Does type and color show a point of view? If not, push one choice further. Then run `npm run audit:design` and `npm run audit:copy`.
+
+## Amendment A1 (after the 4a review; overrides anything above that conflicts)
+- Restriction Line: only the VALUE is the loud element ("1 d 04 h", "Closed", "Frozen", "Open", "Claimed 12 Nov"), Gloock, clamp(4rem, 9vw, 7.5rem), single line, white-space: nowrap, line-height 0.9. The label ("Opens in", "The owner may cancel until then.") is normal body size. It appears ONLY on item detail and the guardian release screen, never on the collection screen.
+- No eyebrow labels. Mono (Azeret) is for accession numbers, hashes, addresses and timestamps only. Running header and margin labels are Source Serif, regular, 0.8rem, sentence case.
+- No heading + subheading pairs. A paragraph under a heading must state a fact the user needs. Section headings max 1.563rem; the page title max 2.441rem.
+- Signature device: summary information as a definition list with dot leaders (label, a flexible 1px dotted rule in ink 45%, value), as in a finding aid.
+- Collection ledger: a header row (Accession, Item, Contents, Quorum, Window, Status), accession numbers in mono as the first column, tabular numerals, the item title is the only link (whole row clickable, hover = 3px left rule). No "Inspect" links.
+- Sample content: plain, specific, irregular. No cliché titles. No descriptions under items; use facts ("9 files, 11 MB").
+- No decorative or fake QR code. QR is added in Phase 8b with the real library.
+- Dev routes are linked only in dev builds, in the footer.

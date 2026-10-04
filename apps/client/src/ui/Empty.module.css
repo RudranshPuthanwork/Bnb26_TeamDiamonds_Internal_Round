@@ -1,0 +1,19 @@
+.emptyBox {
+  border-top: 1px solid var(--color-ink);
+  border-bottom: 1px solid var(--color-ink);
+  padding: var(--space-8) 0;
+  margin: var(--space-6) 0;
+  width: 100%;
+}
+
+.text {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--color-ink-secondary);
+  max-width: var(--measure-body);
+  margin-bottom: var(--space-4);
+}
+
+.action {
+  margin-top: var(--space-4);
+}

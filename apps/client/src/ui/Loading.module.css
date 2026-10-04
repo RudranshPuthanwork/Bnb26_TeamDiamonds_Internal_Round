@@ -1,0 +1,23 @@
+.container {
+  width: 100%;
+  margin: var(--space-6) 0;
+}
+
+.ruledLines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.blankLine {
+  height: 1px;
+  background-color: var(--color-rule);
+  width: 100%;
+}
+
+.statusLine {
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+  letter-spacing: 0.04em;
+}

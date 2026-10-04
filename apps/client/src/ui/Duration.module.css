@@ -1,0 +1,5 @@
+.duration {
+  font-size: var(--text-xs);
+  color: var(--color-ink);
+  white-space: nowrap;
+}
