@@ -1,0 +1,68 @@
+.fieldGroup {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: var(--space-4);
+  row-gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  width: 100%;
+}
+
+.labelCol {
+  grid-column: 1 / span 3;
+}
+
+.label {
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+  display: block;
+}
+
+.inputCol {
+  grid-column: 4 / -1;
+  min-width: 0;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 8rem;
+  padding: var(--space-3);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-ink);
+  line-height: var(--line-height-body);
+  resize: vertical;
+}
+
+.textarea:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-offset);
+  border-color: var(--color-ink);
+}
+
+.hint {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+}
+
+.errorList {
+  margin-top: var(--space-2);
+  border-left: 2px solid var(--color-error);
+  padding-left: var(--space-3);
+}
+
+.errorItem {
+  font-size: var(--text-xs);
+  color: var(--color-error);
+  margin-bottom: var(--space-1);
+}
+
+@media (max-width: 768px) {
+  .labelCol {
+    grid-column: 1 / -1;
+  }
+  .inputCol {
+    grid-column: 1 / -1;
+  }
+}

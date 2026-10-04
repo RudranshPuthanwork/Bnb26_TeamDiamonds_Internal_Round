@@ -1,12 +1,17 @@
 import type {
   AssetItem,
   AssetPolicy,
+  AuditEvent,
   ChainApi,
+  GuardianReadinessInfo,
+  GuardianStatus,
   Hex32,
+  QueuedChange,
   Timeline,
   Vault,
 } from './types';
 import { Status } from './types';
+
 
 export const MOCK_VAULT_ID: Hex32 =
   '0x7f4a819b13c02d1847a9884e62c1d04423b0981d77a0641dfb194017c62bb184';
@@ -159,20 +164,94 @@ export const MOCK_ASSETS: AssetItem[] = [
 ];
 
 export class MockChainApi implements ChainApi {
-  async getVault(vaultId: Hex32): Promise<Vault> {
-    if (vaultId !== MOCK_VAULT_ID) {
-      return { ...MOCK_VAULT, vaultId };
+  private vault: Vault = { ...MOCK_VAULT };
+  private assets: AssetItem[] = [...MOCK_ASSETS];
+  private queuedChanges: QueuedChange[] = [
+    {
+      changeId: '0x1010101010101010101010101010101010101010101010101010101010101010',
+      kind: 'Threshold',
+      description: 'Lower guardian threshold t from 3 to 2',
+      applyAfter: Math.floor(Date.now() / 1000) + 345600, // 4 days remaining
+      queuedAt: Math.floor(Date.now() / 1000) - 259200,
+    },
+    {
+      changeId: '0x2020202020202020202020202020202020202020202020202020202020202020',
+      kind: 'Beneficiary',
+      description: 'Replace contingent beneficiary for HL-0007/07',
+      applyAfter: Math.floor(Date.now() / 1000) + 518400, // 6 days remaining
+      queuedAt: Math.floor(Date.now() / 1000) - 86400,
+    },
+  ];
+  private auditEvents: AuditEvent[] = [
+    {
+      id: 'evt-1',
+      txHash: '0x8f2a11b092c4e7d81a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f',
+      eventName: 'VaultCreated',
+      timestamp: 1727827200, // 02 Oct 2026
+      details: 'Vault initialized with 5 guardians, threshold 3',
+    },
+    {
+      id: 'evt-2',
+      txHash: '0x9a3b22c103d5f8e92b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f50',
+      eventName: 'Heartbeat',
+      timestamp: 1729382400, // 19 Oct 2026
+      details: 'Owner signature received for epoch 4',
+    },
+  ];
+  private failNext: boolean = false;
+
+  private generateFakeTx(): Hex32 {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return ('0x' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')) as Hex32;
+  }
+
+  private async simulateLatency(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  }
+
+  private async executeWrite<T>(action: string, mutate: () => T, details: string): Promise<{ txHash: Hex32; result: T }> {
+    await this.simulateLatency();
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('The chain did not answer. Nothing was changed. Retry, or submit directly from a wallet.');
     }
-    return MOCK_VAULT;
+
+    const result = mutate();
+    const txHash = this.generateFakeTx();
+    this.auditEvents.unshift({
+      id: `evt-${Date.now()}`,
+      txHash,
+      eventName: action,
+      timestamp: Math.floor(Date.now() / 1000),
+      details,
+    });
+    return { txHash, result };
+  }
+
+  toggleFailNextWrite(): boolean {
+    this.failNext = !this.failNext;
+    return this.failNext;
+  }
+
+  isFailNextWrite(): boolean {
+    return this.failNext;
+  }
+
+  async getVault(vaultId: Hex32): Promise<Vault> {
+    if (vaultId !== this.vault.vaultId) {
+      return { ...this.vault, vaultId };
+    }
+    return { ...this.vault };
   }
 
   async getAsset(
     vaultId: Hex32,
     assetId: Hex32
   ): Promise<{ policy: AssetPolicy; released: boolean; claimed: boolean }> {
-    const asset = MOCK_ASSETS.find(
-      (a) => a.vaultId === vaultId && a.assetId === assetId
-    ) ?? MOCK_ASSETS[0];
+    const asset =
+      this.assets.find((a) => a.vaultId === vaultId && a.assetId === assetId) ??
+      this.assets[0];
     return {
       policy: asset.policy,
       released: asset.released,
@@ -181,16 +260,16 @@ export class MockChainApi implements ChainApi {
   }
 
   async status(vaultId: Hex32, assetId: Hex32): Promise<Status> {
-    const asset = MOCK_ASSETS.find(
+    const asset = this.assets.find(
       (a) => a.vaultId === vaultId && a.assetId === assetId
     );
     return asset ? asset.status : Status.Sealed;
   }
 
   async timeline(vaultId: Hex32, assetId: Hex32): Promise<Timeline> {
-    const asset = MOCK_ASSETS.find(
-      (a) => a.vaultId === vaultId && a.assetId === assetId
-    ) ?? MOCK_ASSETS[0];
+    const asset =
+      this.assets.find((a) => a.vaultId === vaultId && a.assetId === assetId) ??
+      this.assets[0];
 
     const isCooling = asset.status === Status.Cooling;
     const isDisputed = asset.status === Status.Disputed;
@@ -214,9 +293,9 @@ export class MockChainApi implements ChainApi {
   }
 
   async currentClaimant(vaultId: Hex32, assetId: Hex32): Promise<Hex32> {
-    const asset = MOCK_ASSETS.find(
-      (a) => a.vaultId === vaultId && a.assetId === assetId
-    ) ?? MOCK_ASSETS[0];
+    const asset =
+      this.assets.find((a) => a.vaultId === vaultId && a.assetId === assetId) ??
+      this.assets[0];
 
     if (asset.status === Status.ContingentEligible) {
       return asset.policy.contingentBenef;
@@ -225,12 +304,154 @@ export class MockChainApi implements ChainApi {
   }
 
   async listAssets(vaultId: Hex32): Promise<AssetItem[]> {
-    return MOCK_ASSETS.filter((a) => a.vaultId === vaultId);
+    return [...this.assets.filter((a) => a.vaultId === vaultId)];
   }
 
   async getCurrentBlock(): Promise<bigint> {
     return MOCK_CURRENT_BLOCK;
   }
+
+  // --- Write methods ---
+
+  async heartbeat(_vaultId: Hex32): Promise<Hex32> {
+    const { txHash } = await this.executeWrite(
+      'Heartbeat',
+      () => {
+        this.vault.epoch += 1;
+        this.vault.lastHeartbeat = Math.floor(Date.now() / 1000);
+      },
+      `Heartbeat recorded. Epoch advanced to ${this.vault.epoch + 1}`
+    );
+    return txHash;
+  }
+
+  async cancel(_vaultId: Hex32): Promise<Hex32> {
+    const { txHash } = await this.executeWrite(
+      'Cancelled',
+      () => {
+        this.vault.epoch += 1;
+        this.vault.lastHeartbeat = Math.floor(Date.now() / 1000);
+        // Reset everything not released to Sealed
+        this.assets = this.assets.map((a) => {
+          if (!a.released && a.status !== Status.Claimed) {
+            return { ...a, status: Status.Sealed };
+          }
+          return a;
+        });
+      },
+      `Owner cancel executed. Unreleased assets reset to Sealed. Epoch is now ${this.vault.epoch + 1}`
+    );
+    return txHash;
+  }
+
+  async addAsset(
+    vaultId: Hex32,
+    item: Omit<AssetItem, 'vaultId' | 'status' | 'released' | 'claimed'>
+  ): Promise<Hex32> {
+    const { txHash } = await this.executeWrite(
+      'AssetAdded',
+      () => {
+        this.vault.epoch += 1;
+        this.vault.lastHeartbeat = Math.floor(Date.now() / 1000);
+        const newItem: AssetItem = {
+          ...item,
+          vaultId,
+          status: Status.Sealed,
+          released: false,
+          claimed: false,
+        };
+        this.assets.push(newItem);
+        return newItem;
+      },
+      `Asset ${item.accessionNumber} added to collection.`
+    );
+    return txHash;
+  }
+
+  async createVault(
+    owners: readonly [Hex32, Hex32],
+    guardians: Hex32[],
+    t: number,
+    policyDelay: number
+  ): Promise<Hex32> {
+    const newVaultId = this.generateFakeTx();
+    const { txHash } = await this.executeWrite(
+      'VaultCreated',
+      () => {
+        this.vault = {
+          vaultId: newVaultId,
+          owners,
+          guardians: [...guardians],
+          t,
+          policyDelay,
+          epoch: 1,
+          lastHeartbeat: Math.floor(Date.now() / 1000),
+          absentUntil: 0,
+          disputedAt: 0,
+          disputeEpoch: 0,
+          disputer: 0,
+        };
+        this.assets = [];
+        return newVaultId;
+      },
+      `New vault created with ${guardians.length} custodians, threshold ${t}`
+    );
+    return txHash;
+  }
+
+  async setAbsence(_vaultId: Hex32, until: number): Promise<Hex32> {
+    const { txHash } = await this.executeWrite(
+      'AbsenceSet',
+      () => {
+        this.vault.absentUntil = until;
+      },
+      `Planned absence set until timestamp ${until}`
+    );
+    return txHash;
+  }
+
+  async revokeChange(_vaultId: Hex32, changeId: Hex32): Promise<Hex32> {
+    const { txHash } = await this.executeWrite(
+      'ChangeRevoked',
+      () => {
+        this.queuedChanges = this.queuedChanges.filter((c) => c.changeId !== changeId);
+      },
+      `Queued policy change ${changeId.slice(0, 10)}… revoked.`
+    );
+    return txHash;
+  }
+
+  async listQueuedChanges(_vaultId: Hex32): Promise<QueuedChange[]> {
+    return [...this.queuedChanges];
+  }
+
+  async getGuardiansReadiness(_vaultId: Hex32): Promise<GuardianReadinessInfo> {
+    const guardianStatuses: GuardianStatus[] = this.vault.guardians.map((keyId, idx) => ({
+      index: idx + 1,
+
+      keyId,
+      lastDrillVersion: 1,
+      lastDrillAt: 1729267200 - idx * 86400, // Irregular dates around mid Oct
+      ready: idx !== 4, // 4 out of 5 ready
+    }));
+
+    const readyCount = guardianStatuses.filter((g) => g.ready).length;
+    const slack = readyCount - this.vault.t;
+
+    return {
+      vaultId: this.vault.vaultId,
+      t: this.vault.t,
+      n: this.vault.guardians.length,
+      guardians: guardianStatuses,
+      readyCount,
+      slack,
+    };
+  }
+
+  async listAuditEvents(): Promise<AuditEvent[]> {
+    return [...this.auditEvents];
+  }
 }
 
 export const mockApi = new MockChainApi();
+

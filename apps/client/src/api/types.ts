@@ -146,6 +146,46 @@ export interface AssetItem {
   status: Status;
 }
 
+export interface WireCard {
+  kind: 0 | 1;
+  a: Hex32;
+  b: Hex32;
+  encPk: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  txHash: Hex32;
+  eventName: string;
+  timestamp: number;
+  details: string;
+}
+
+export interface QueuedChange {
+  changeId: Hex32;
+  kind: string;
+  description: string;
+  applyAfter: number;
+  queuedAt: number;
+}
+
+export interface GuardianStatus {
+  index: number;
+  keyId: Hex32;
+  lastDrillVersion: number;
+  lastDrillAt: number;
+  ready: boolean;
+}
+
+export interface GuardianReadinessInfo {
+  vaultId: Hex32;
+  t: number;
+  n: number;
+  guardians: GuardianStatus[];
+  readyCount: number;
+  slack: number;
+}
+
 export interface ChainApi {
   getVault(vaultId: Hex32): Promise<Vault>;
   getAsset(
@@ -158,4 +198,25 @@ export interface ChainApi {
   currentClaimant(vaultId: Hex32, assetId: Hex32): Promise<Hex32>;
   listAssets(vaultId: Hex32): Promise<AssetItem[]>;
   getCurrentBlock(): Promise<bigint>;
+  // Write methods per specification
+  heartbeat(vaultId: Hex32): Promise<Hex32>;
+  cancel(vaultId: Hex32): Promise<Hex32>;
+  addAsset(
+    vaultId: Hex32,
+    item: Omit<AssetItem, 'vaultId' | 'status' | 'released' | 'claimed'>
+  ): Promise<Hex32>;
+  createVault(
+    owners: readonly [Hex32, Hex32],
+    guardians: Hex32[],
+    t: number,
+    policyDelay: number
+  ): Promise<Hex32>;
+  setAbsence(vaultId: Hex32, until: number): Promise<Hex32>;
+  revokeChange(vaultId: Hex32, changeId: Hex32): Promise<Hex32>;
+  listQueuedChanges(vaultId: Hex32): Promise<QueuedChange[]>;
+  getGuardiansReadiness(vaultId: Hex32): Promise<GuardianReadinessInfo>;
+  listAuditEvents(): Promise<AuditEvent[]>;
+  toggleFailNextWrite(): boolean;
+  isFailNextWrite(): boolean;
 }
+

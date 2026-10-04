@@ -62,3 +62,12 @@ Does it look like a default template? More than 2 icons or 1 gradient? Centered-
 - Sample content: plain, specific, irregular. No cliché titles. No descriptions under items; use facts ("9 files, 11 MB").
 - No decorative or fake QR code. QR is added in Phase 8b with the real library.
 - Dev routes are linked only in dev builds, in the footer.
+
+## Amendment A2 (supersedes Step-1 decision (c), the accent rules, the Stamp component and the two-column margin layout; A1 still applies except where it conflicts)
+- Palette: page #FFFFFF, ink #15181C, secondary text #4A5058, hairline rules #D5D8DC. NO accent color anywhere. The only other color is error text and error rule: #A32A2A.
+- Buttons: primary = ink fill, white text (hover lightens to #2B3036); secondary = 1px ink border, white fill (hover fills #F2F3F4); tertiary = underlined text (hover thickens underline). Radius stays 2px.
+- Status is plain text, no box, no fill, no border. "Releasable" and "Claimed" are semibold; every other status is regular weight. The border-style Stamp variants are retired.
+- Navigation: a sticky header at the TOP of every screen with a 1px bottom rule. Left: wordmark "Heirloom" in Gloock. Then the current role's links. Right: current role name, and in dev builds a "Dev" menu. The active link has a 2px underline. The footer holds only the sample-data note.
+- Layout: one left-aligned container, max-width 72rem, consistent gutters. The margin column is retired. Ledger tables and dot-leader summary lists stay.
+- Hashes and addresses are abbreviated (0x3d7b…7122) with the full value selectable and in the title attribute.
+- Fonts unchanged. Everything else in the brief (no gradients, glow, shadows, icons, filler words) still applies.

@@ -1,7 +1,15 @@
 import React, { Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { RegisterPage } from './pages/RegisterPage';
-import { Loading } from './ui/Loading';
+import {
+  CollectionScreen,
+  CreateCollectionScreen,
+  AddItemScreen,
+  ItemDetailScreen,
+  GuardiansScreen,
+  ChangesScreen,
+  RotateScreen,
+} from './screens';
+import { Page, Loading } from './ui';
 
 // Dev routes: code-split so production builds exclude them from the primary bundle
 const DevStatesPage = React.lazy(() =>
@@ -21,19 +29,27 @@ export function App() {
     <HashRouter>
       <Suspense
         fallback={
-          <div style={{ padding: 'var(--space-8)' }}>
+          <Page>
             <Loading />
-          </div>
+          </Page>
         }
       >
         <Routes>
-          <Route path="/" element={<RegisterPage />} />
+          <Route path="/" element={<CollectionScreen />} />
+          <Route path="/create" element={<CreateCollectionScreen />} />
+          <Route path="/item/new" element={<AddItemScreen />} />
+          <Route path="/item/:accession/rotate" element={<RotateScreen />} />
+          <Route path="/item/:accession" element={<ItemDetailScreen />} />
+          <Route path="/guardians" element={<GuardiansScreen />} />
+          <Route path="/changes" element={<ChangesScreen />} />
+
           {showDevRoutes && (
             <>
               <Route path="/dev/states" element={<DevStatesPage />} />
               <Route path="/dev/tokens" element={<DevTokensPage />} />
             </>
           )}
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

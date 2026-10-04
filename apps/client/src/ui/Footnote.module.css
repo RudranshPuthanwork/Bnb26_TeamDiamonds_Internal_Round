@@ -1,0 +1,5 @@
+.footnote {
+  margin-top: var(--space-6);
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+}
