@@ -14,6 +14,7 @@ struct OState {
     // policy (durations in TIME_UNITs)
     uint8 mask;
     uint256 kAttest;
+    uint256 guardians; // n
     bool requireEvidence;
     uint256 minInactivity;
     uint256 window;
@@ -23,6 +24,8 @@ struct OState {
     uint256 absentUntil;
     bool disputed;
     uint256 disputedAt;
+    uint8 disputer; // D14: index of the guardian who filed the dispute
+    bool latched; // D14: a share was submitted; release is permanent
     OAtt[5] att;
 }
 
@@ -48,17 +51,23 @@ library ReleaseOracle {
         }
     }
 
-    /// D4: earliest T at which >= kAttest+1 valid attestations with at > disputedAt exist. 0 = none / no dispute.
+    /// D14: kDispute = min(kAttest + 1, n - 1).
+    function kDispute(OState memory s) internal pure returns (uint256) {
+        return s.kAttest + 1 < s.guardians - 1 ? s.kAttest + 1 : s.guardians - 1;
+    }
+
+    /// D4/D14: earliest T at which >= kDispute valid attestations with at > disputedAt, not by the disputer, exist.
+    /// 0 = none / no dispute.
     function resumeAt(OState memory s) internal pure returns (uint256 best) {
         if (!s.disputed) return 0;
         for (uint256 c; c < 5; ++c) {
-            if (!valid(s, c) || s.att[c].at <= s.disputedAt) continue;
+            if (c == s.disputer || !valid(s, c) || s.att[c].at <= s.disputedAt) continue;
             uint256 t = s.att[c].at;
             uint256 n;
             for (uint256 i; i < 5; ++i) {
-                if (valid(s, i) && s.att[i].at > s.disputedAt && s.att[i].at <= t) ++n;
+                if (i != s.disputer && valid(s, i) && s.att[i].at > s.disputedAt && s.att[i].at <= t) ++n;
             }
-            if (n >= s.kAttest + 1 && (best == 0 || t < best)) best = t;
+            if (n >= kDispute(s) && (best == 0 || t < best)) best = t;
         }
     }
 
@@ -74,10 +83,25 @@ library ReleaseOracle {
 
     /// isReleasable <=> t_quorum defined AND now >= t_open + window AND NOT disputed(e) (unless overridden)
     function releasable(OState memory s, uint256 now_) internal pure returns (bool) {
+        if (s.latched) return true;
         if (tQuorum(s) == 0) return false;
         if (now_ < tOpen(s) + s.window * s.unit) return false;
         if (s.disputed && resumeAt(s) == 0) return false;
         return true;
+    }
+
+    /// D5 + D14: may guardian `i` file (reason, ev) now? A first filing always; later only a raise INCAPACITATED ->
+    /// DECEASED or adding an evidence hash; plus one re-affirm (same or higher reason, evidence kept) for an
+    /// attestation filed at or before the dispute of the current epoch.
+    function attestAllowed(OState memory s, uint256 i, uint8 reason, bytes32 ev) internal pure returns (bool) {
+        OAtt memory a = s.att[i];
+        if (!a.filed) return true;
+        bool raise = a.reason == 1 && reason == 2;
+        bool addEv = a.ev == 0 && ev != 0;
+        bool reasonOk = raise || reason == a.reason;
+        bool evOk = ev == a.ev || addEv;
+        bool reaffirm = s.disputed && a.at <= s.disputedAt;
+        return reasonOk && evOk && (raise || addEv || reaffirm);
     }
 
     function _holdsAt(OState memory s, uint256 t, uint256) private pure returns (bool) {

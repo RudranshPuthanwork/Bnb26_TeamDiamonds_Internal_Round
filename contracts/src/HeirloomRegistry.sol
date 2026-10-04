@@ -91,11 +91,13 @@ contract HeirloomRegistry is EIP712 {
         uint40 absentUntil;
         uint40 disputedAt;
         uint32 disputeEpoch;
+        uint8 disputer;
         uint32 policyDelay;
         mapping(uint32 => mapping(uint8 => Attestation)) att;
         mapping(uint8 => uint40) lastDrill;
         mapping(bytes32 => AssetPolicy) assets;
         mapping(bytes32 => bool) claimed;
+        mapping(bytes32 => bool) released; // D14 latch
         mapping(bytes32 => PendingChange) queued;
         mapping(bytes32 => mapping(bytes32 => mapping(uint8 => bytes))) shares;
     }
@@ -127,6 +129,8 @@ contract HeirloomRegistry is EIP712 {
     error NotClaimant();
     error BadShare();
     error AlreadyClaimed();
+    error ShareExists();
+    error NoShares();
 
     event VaultCreated(bytes32 indexed vaultId, bytes32 owner0, bytes32 owner1, uint8 guardians, uint8 t);
     event AssetAdded(bytes32 indexed vaultId, bytes32 indexed assetId, bytes32 primaryBenef, bytes32 bundleCid);
@@ -146,7 +150,7 @@ contract HeirloomRegistry is EIP712 {
 
     /// @param timeUnit Seconds per TIME_UNIT (86400 prod, 60 demo, 1 anvil tests).
     constructor(uint256 timeUnit) EIP712("HeirloomRegistry", "1") {
-        if (timeUnit == 0) revert BadBounds();
+        if (timeUnit == 0 || timeUnit > 30 days) revert BadBounds();
         TIME_UNIT = timeUnit;
     }
 
@@ -238,6 +242,7 @@ contract HeirloomRegistry is EIP712 {
         if (id != owners[0] || owners[0] == 0) revert NotAuthorized();
         if (n < 2 || n > MAX_GUARDIANS || t == 0 || t > n) revert BadBounds();
         for (uint256 i; i < n; ++i) {
+            if (guardians[i] == 0) revert BadBounds();
             for (uint256 j; j < i; ++j) {
                 if (guardians[i] == guardians[j]) revert DuplicateGuardian();
             }
@@ -262,7 +267,8 @@ contract HeirloomRegistry is EIP712 {
         if (v.assets[assetId].primaryBenef != 0) revert AssetExists();
         uint256 n = v.guardians.length;
         if (
-            policy.primaryBenef == 0 || policy.reasonsMask == 0 || policy.reasonsMask > 0x0e || policy.kAttest == 0
+            policy.primaryBenef == 0 || policy.reasonsMask == 0 || policy.reasonsMask > 0x0e || policy.reasonsMask & 1 != 0 || policy.window == 0
+                || (policy.contingentBenef != 0 && policy.claimDeadline == 0) || policy.kAttest == 0
                 || policy.kAttest >= n || policy.minInactivity == 0 || policy.shareCommitments.length != n
                 || policy.bundleCid == 0
         ) revert BadPolicy();
@@ -299,6 +305,7 @@ contract HeirloomRegistry is EIP712 {
     /// @param auth Owner authorisation.
     function setAbsence(bytes32 vaultId, uint40 until, Auth calldata auth) external {
         _authorize(vaultId, Role.Owner, Action.SetAbsence, keccak256(abi.encode(until)), auth);
+        if (until > block.timestamp + 365 * TIME_UNIT) revert BadBounds();
         Vault storage v = _v[vaultId];
         v.absentUntil = until;
         emit AbsenceSet(vaultId, until);
@@ -340,9 +347,11 @@ contract HeirloomRegistry is EIP712 {
         Vault storage v = _v[vaultId];
         Attestation storage a = v.att[v.epoch][g];
         if (a.at != 0) {
+            // D14 re-affirm: a pre-dispute attestation may be re-filed once to count for the override.
+            bool reaffirm = v.disputedAt != 0 && v.disputeEpoch == v.epoch && a.at <= v.disputedAt;
             bool raise = a.reason == Reason.INCAPACITATED && reason == Reason.DECEASED;
             bool addEv = a.evidenceHash == 0 && evidenceHash != 0;
-            if (!((raise || reason == a.reason) && (evidenceHash == a.evidenceHash || addEv) && (raise || addEv))) {
+            if (!((raise || reason == a.reason) && (evidenceHash == a.evidenceHash || addEv) && (raise || addEv || reaffirm))) {
                 revert AttestationLocked();
             }
         }
@@ -359,6 +368,7 @@ contract HeirloomRegistry is EIP712 {
         if (v.disputedAt != 0 && v.disputeEpoch == v.epoch) revert AlreadyDisputed();
         v.disputedAt = uint40(block.timestamp);
         v.disputeEpoch = v.epoch;
+        v.disputer = g;
         emit Disputed(vaultId, g, v.epoch);
     }
 
@@ -378,10 +388,14 @@ contract HeirloomRegistry is EIP712 {
         (, uint8 g) = _authorize(
             vaultId, Role.Guardian, Action.SubmitShare, keccak256(abi.encode(assetId, claimantKeyId, encShare)), auth
         );
+        Vault storage v = _v[vaultId];
+        if (v.claimed[assetId]) revert AlreadyClaimed();
         if (!isReleasable(vaultId, assetId)) revert NotReleasable();
         if (claimantKeyId != currentClaimant(vaultId, assetId)) revert NotClaimant();
         if (encShare.length != SHARE_LEN) revert BadShare();
-        _v[vaultId].shares[assetId][claimantKeyId][g] = encShare;
+        if (v.shares[assetId][claimantKeyId][g].length != 0) revert ShareExists();
+        v.shares[assetId][claimantKeyId][g] = encShare;
+        v.released[assetId] = true;
         emit ShareSubmitted(vaultId, assetId, g);
     }
 
@@ -402,6 +416,10 @@ contract HeirloomRegistry is EIP712 {
         if (v.claimed[assetId]) revert AlreadyClaimed();
         if (!isReleasable(vaultId, assetId)) revert NotReleasable();
         if (id != currentClaimant(vaultId, assetId)) revert NotClaimant();
+        uint256 n = v.guardians.length;
+        uint256 i;
+        while (i < n && v.shares[assetId][id][uint8(i)].length == 0) ++i;
+        if (i == n) revert NoShares();
         v.claimed[assetId] = true;
         emit Claimed(vaultId, assetId, id);
     }
@@ -415,6 +433,7 @@ contract HeirloomRegistry is EIP712 {
 
     struct Eval {
         bool disputeActive;
+        bool latched;
         uint256 tSilence;
         uint256 tQuorum;
         uint256 resumeAt;
@@ -431,6 +450,7 @@ contract HeirloomRegistry is EIP712 {
             atts[i] = v.att[v.epoch][i];
         }
         e.disputeActive = v.disputedAt != 0 && v.disputeEpoch == v.epoch;
+        e.latched = v.released[assetId];
         (e.tSilence, e.tQuorum, e.resumeAt, e.tOpen, e.ok) = ReleaseRule.evaluate(
             RuleParams({
                 lastHeartbeat: v.lastHeartbeat,
@@ -442,7 +462,9 @@ contract HeirloomRegistry is EIP712 {
                 window: a.window,
                 disputedAt: v.disputedAt,
                 disputeActive: e.disputeActive,
-                kDispute: uint256(a.kAttest) + 1,
+                disputer: v.disputer,
+                latched: e.latched,
+                kDispute: a.kAttest + 1 < n ? a.kAttest + 1 : n - 1, // D14: min(kAttest+1, n-1)
                 timeUnit: TIME_UNIT,
                 now_: block.timestamp
             }),
@@ -477,7 +499,7 @@ contract HeirloomRegistry is EIP712 {
         (AssetPolicy storage a, Eval memory e) = _eval(vaultId, assetId);
         if (_v[vaultId].claimed[assetId]) return Status.Claimed;
         if (e.ok) {
-            return block.timestamp >= e.tOpen + (uint256(a.window) + a.claimDeadline) * TIME_UNIT
+            return e.tOpen != 0 && block.timestamp >= e.tOpen + (uint256(a.window) + a.claimDeadline) * TIME_UNIT
                 ? Status.ContingentEligible
                 : Status.Releasable;
         }
@@ -517,7 +539,7 @@ contract HeirloomRegistry is EIP712 {
         (AssetPolicy storage a, Eval memory e) = _eval(vaultId, assetId);
         (tSilence, tQuorum, resumeAt, tOpen) = (e.tSilence, e.tQuorum, e.resumeAt, e.tOpen);
         kAttest = a.kAttest;
-        disputed = e.disputeActive && resumeAt == 0;
+        disputed = e.disputeActive && resumeAt == 0 && !e.latched;
         Vault storage v = _v[vaultId];
         for (uint8 i; i < v.guardians.length; ++i) {
             Attestation storage x = v.att[v.epoch][i];

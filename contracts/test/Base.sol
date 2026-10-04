@@ -67,7 +67,8 @@ abstract contract Base is Test {
         for (uint256 i; i < 5; ++i) {
             sc[i] = bytes32(i + 1);
         }
-        p = R.AssetPolicy(mask, k, ev, minIn, win, cdl, _k(benef), _k(contBenef), bytes32(uint256(1)), 1, sc);
+        // D14: a contingent beneficiary needs claimDeadline > 0, so 0 means "don't care" here
+        p = R.AssetPolicy(mask, k, ev, minIn, win, cdl == 0 ? 1 : cdl, _k(benef), _k(contBenef), bytes32(uint256(1)), 1, sc);
     }
 
     function _add(bytes32 id, R.AssetPolicy memory p) internal {
@@ -151,6 +152,12 @@ abstract contract Base is Test {
         }
         _at(h + 5); // silence h+3, quorum h+1, window 2
         assertTrue(_rel(id));
+    }
+
+    /// @dev Guardian `i` submits the (dummy) share for the primary beneficiary of ASSET.
+    function _submit(uint256 i) internal {
+        vm.prank(g[i]);
+        r.submitShare(vid, ASSET, _k(benef), _share(), _d());
     }
 
     function _share() internal pure returns (bytes memory) {

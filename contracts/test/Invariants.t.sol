@@ -29,6 +29,7 @@ contract Handler is Base {
     }
     GAtt[5] public gAtt;
     bool[NA] public gClaimed;
+    bool[NA] public gLatched; // D14: first successful submitShare latches the release
     uint32 public lastEpoch;
 
     // violation flags (checked by the invariant test)
@@ -82,7 +83,8 @@ contract Handler is Base {
         _syncEpoch();
         // I3: every asset that has not been claimed is Sealed right after an owner action
         for (uint256 a; a < NA; ++a) {
-            if (!gClaimed[a] && r.status(vid, ids[a]) != R.Status.Sealed) i3Bad = true;
+            if (gClaimed[a]) continue;
+            if (r.status(vid, ids[a]) != (gLatched[a] ? R.Status.Releasable : R.Status.Sealed)) i3Bad = true;
         }
     }
 
@@ -94,6 +96,7 @@ contract Handler is Base {
 
     /// @dev Independent necessary conditions for release: lapse AND quorum AND window elapsed.
     function mustHold(uint256 a, uint256 t) public view returns (bool) {
+        if (gLatched[a]) return true;
         uint256 n = validCount(a);
         if (n < kAtt[a]) return false;
         uint256[] memory ats = new uint256[](n);
@@ -175,6 +178,7 @@ contract Handler is Base {
         vm.prank(g[gi % 5]);
         try r.submitShare(vid, ids[a], claimant, _share(), _d()) {
             ++shareOk;
+            gLatched[a] = true;
             if (!ok || wrongClaimant) shareBad = true;
         } catch {}
     }
@@ -222,7 +226,7 @@ contract InvariantsTest is StdInvariant, Base {
         }
     }
 
-    /// I3: right after every owner action every unclaimed asset was Sealed.
+    /// I3: right after every owner action every unclaimed asset was Sealed (Releasable if latched, D14).
     function invariant_I3_ownerActionSealsEverything() public view {
         assertFalse(h.i3Bad());
     }
@@ -266,6 +270,13 @@ contract InvariantsTest is StdInvariant, Base {
 
     function invariant_markClaimedOnlyByCurrentClaimant() public view {
         assertFalse(h.claimBad());
+    }
+
+    /// D14: once a share was submitted the asset stays releasable until claimed.
+    function invariant_latchIsSticky() public view {
+        for (uint256 a; a < 3; ++a) {
+            if (h.gLatched(a) && !h.claimedGhost(a)) assertTrue(r.isReleasable(vid, h.ids(a)));
+        }
     }
 
     function invariant_claimedIsSticky() public view {

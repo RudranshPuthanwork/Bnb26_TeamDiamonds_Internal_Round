@@ -17,6 +17,7 @@ contract DifferentialTest is Base {
             delete o.att[i];
         }
         o.disputed = false;
+        o.disputer = 0;
         o.disputedAt = 0;
     }
 
@@ -48,11 +49,12 @@ contract DifferentialTest is Base {
         uint8 k = uint8(1 + (seed >> 16) % 4);
         bool ev = ((seed >> 24) & 1) == 1;
         uint32 minIn = uint32(1 + (seed >> 32) % 20);
-        uint32 win = uint32((seed >> 40) % 10);
-        _add(ASSET, _pol(mask, k, ev, minIn, win, 0));
+        uint32 win = uint32(1 + (seed >> 40) % 10); // D14: window >= 1
+        _add(ASSET, _pol(mask, k, ev, minIn, win, 1));
 
         o.mask = mask;
         o.kAttest = k;
+        o.guardians = 5;
         o.requireEvidence = ev;
         o.minInactivity = minIn;
         o.window = win;
@@ -84,18 +86,32 @@ contract DifferentialTest is Base {
                 uint256 gi = (x >> 8) % 5;
                 Reason re = Reason(1 + (x >> 16) % 3);
                 bytes32 e = evs[(x >> 24) % 4];
+                bool allowed = o.attestAllowed(gi, uint8(re), e);
                 vm.prank(g[gi]);
                 try r.attest(vid, re, e, _d()) {
+                    assertTrue(allowed, "attest accepted but oracle says locked");
                     o.att[gi].filed = true;
                     o.att[gi].reason = uint8(re);
                     o.att[gi].at = _now();
                     o.att[gi].ev = e;
-                } catch {}
+                } catch {
+                    assertFalse(allowed, "attest rejected but oracle says allowed");
+                }
             } else if (op < 90) {
-                vm.prank(g[(x >> 8) % 5]);
+                uint256 gi = (x >> 8) % 5;
+                vm.prank(g[gi]);
                 try r.dispute(vid, _d()) {
+                    assertFalse(o.disputed, "second dispute in one epoch accepted");
                     o.disputed = true;
                     o.disputedAt = _now();
+                    o.disputer = uint8(gi);
+                } catch {}
+            } else if (op < 95) {
+                // D14 latch: the first accepted share makes the asset releasable for good
+                vm.prank(g[(x >> 8) % 5]);
+                try r.submitShare(vid, ASSET, _k(benef), _share(), _d()) {
+                    assertTrue(o.releasable(_now()), "share accepted while oracle says not releasable");
+                    o.latched = true;
                 } catch {}
             } else {
                 _at(_now() + 1);

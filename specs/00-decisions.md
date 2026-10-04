@@ -14,3 +14,14 @@ D11 Phase 1 scope. Build all storage fields and the full release formula now. Im
 D12 Bundle. JSON `heirloom.bundle.v1`, base64url fields, fixed key order; contains C, per-guardian HPKE shares, per-beneficiary HPKE K_b, and a `participants` list of identity cards.
 D13 Chain. Base Sepolia (84532). TIME_UNIT set in the constructor (86400 prod, 60 demo, 1 for anvil tests). Deploy address in `deployments/base-sepolia.json`.
 R1 Open risk (decide at the Phase 6 spike). A passkey is bound to its rpId. The static recovery page on an IPFS gateway has a different origin, so a passkey created on the app's domain probably cannot sign or produce PRF output there. Fallback to evaluate: the beneficiary also holds an offline recovery key (EOA + X25519 secret, printed on the Recovery Card), with K_b encrypted to both.
+
+D14 Amendments from review 1c (override D3/D4/D5/D8 where they conflict)
+- kAttest ≤ n−1 stays. kDispute = min(kAttest+1, n−1). The disputer's index is stored with disputedAt and excluded from the override count.
+- Re-affirm: if disputeEpoch == epoch and a guardian's existing attestation has at ≤ disputedAt, that guardian may re-file once (same or higher reason); at = now. Otherwise D5 stands.
+- Latch: the first successful submitShare for an asset sets released[asset] = true. isReleasable and status return Releasable from then until claimed. Later disputes, cancels, heartbeats or attestation upgrades do not un-release it. A cancel still voids assets that have not latched.
+- submitShare: write-once per (asset, claimant, guardian) slot; reverts after claimed.
+- addAsset: reject reasonsMask with bit 0 set or above 0x0e; reject window == 0; reject claimDeadline == 0 when a contingent beneficiary is set.
+- createVault: reject any zero keyId (owners, guardians, beneficiaries).
+- Constructor: 1 ≤ TIME_UNIT ≤ 30 days.
+- setAbsence: at most 365 units; setAbsence(0) clears it.
+- markClaimed requires at least one submitted share for that claimant.

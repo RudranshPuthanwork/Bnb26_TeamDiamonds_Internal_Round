@@ -27,6 +27,12 @@ contract UnitTest is Base {
         new R(0);
     }
 
+    function test_constructor_upperBound() public {
+        new R(30 days);
+        vm.expectRevert(R.BadBounds.selector);
+        new R(30 days + 1);
+    }
+
     function test_constructor_storesUnit() public view {
         assertEq(r.TIME_UNIT(), 1);
         assertEq(r.MAX_GUARDIANS(), 12);
@@ -86,6 +92,12 @@ contract UnitTest is Base {
         vm.prank(owner);
         r.createVault([ok, bytes32(0)], dup, 3, 0, _d());
 
+        bytes32[] memory zg = _gk(5);
+        zg[2] = bytes32(0);
+        vm.expectRevert(R.BadBounds.selector); // S4: zero guardian keyId
+        vm.prank(owner);
+        r.createVault([ok, bytes32(0)], zg, 3, 0, _d());
+
         vm.expectRevert(R.NotAuthorized.selector); // signer is not owners[0]
         vm.prank(stranger);
         r.createVault([ok, bytes32(0)], gk, 3, 0, _d());
@@ -130,7 +142,7 @@ contract UnitTest is Base {
         _add(ASSET, p);
 
         bytes32 id2 = keccak256("2");
-        R.AssetPolicy[7] memory bad;
+        R.AssetPolicy[11] memory bad;
         bad[0] = _pol(0x06, 0, false, 3, 2, 5); // k = 0
         bad[1] = _pol(0x00, 3, false, 3, 2, 5); // mask empty
         bad[2] = _pol(0x10, 3, false, 3, 2, 5); // mask out of range
@@ -141,7 +153,12 @@ contract UnitTest is Base {
         bad[5].bundleCid = 0;
         bad[6] = _pol(0x06, 3, false, 3, 2, 5);
         bad[6].shareCommitments = new bytes32[](4);
-        for (uint256 i; i < 7; ++i) {
+        bad[7] = _pol(0x07, 3, false, 3, 2, 5); // S2: NONE bit set
+        bad[8] = _pol(0x01, 3, false, 3, 2, 5);
+        bad[9] = _pol(0x06, 3, false, 3, 0, 5); // S5: window 0
+        bad[10] = _pol(0x06, 3, false, 3, 2, 5); // S5: contingent without claimDeadline
+        bad[10].claimDeadline = 0;
+        for (uint256 i; i < 11; ++i) {
             vm.expectRevert(R.BadPolicy.selector);
             vm.prank(owner);
             r.addAsset(vid, id2, bad[i], _d());
@@ -193,15 +210,28 @@ contract UnitTest is Base {
     function test_setAbsence_setsAndClears() public {
         _stdAsset(ASSET);
         vm.expectEmit(true, false, false, true);
-        emit AbsenceSet(vid, uint40(T0 + 500));
+        emit AbsenceSet(vid, uint40(T0 + 300));
         vm.prank(owner);
-        r.setAbsence(vid, uint40(T0 + 500), _d());
+        r.setAbsence(vid, uint40(T0 + 300), _d());
         (uint256 tSilence,,,,,,,,) = r.timeline(vid, ASSET);
-        assertEq(tSilence, T0 + 500);
+        assertEq(tSilence, T0 + 300);
         vm.prank(owner);
         r.setAbsence(vid, 0, _d());
         (tSilence,,,,,,,,) = r.timeline(vid, ASSET);
         assertEq(tSilence, T0 + 3);
+    }
+
+    function test_setAbsence_cap() public {
+        vm.prank(owner);
+        r.setAbsence(vid, uint40(_now() + 365 * unit), _d());
+        vm.expectRevert(R.BadBounds.selector);
+        vm.prank(owner);
+        r.setAbsence(vid, uint40(_now() + 365 * unit + 1), _d());
+        vm.prank(owner); // 0 clears
+        r.setAbsence(vid, 0, _d());
+        _stdAsset(ASSET);
+        (uint256 tSilence,,,,,,,,) = r.timeline(vid, ASSET);
+        assertEq(tSilence, _now() + 3);
     }
 
     function test_ownerFns_noVault() public {
@@ -326,9 +356,45 @@ contract UnitTest is Base {
         emit ShareSubmitted(vid, ASSET, 3);
         vm.prank(g[3]);
         r.submitShare(vid, ASSET, c, s, _d());
-        // overwrite by the same guardian is allowed
-        vm.prank(g[3]);
-        r.submitShare(vid, ASSET, c, s, _d());
+    }
+
+    // S1: write-once slots, and nothing after claimed
+    function test_submitShare_writeOnce_andClosedAfterClaim() public {
+        _stdAsset(ASSET);
+        _release(ASSET);
+        _submit(3);
+        vm.expectRevert(R.ShareExists.selector);
+        _submit(3);
+        _submit(2);
+        vm.prank(benef);
+        r.markClaimed(vid, ASSET, _d());
+        vm.expectRevert(R.AlreadyClaimed.selector);
+        _submit(1);
+    }
+
+    // D14 latch: first submitShare makes the release permanent until claimed
+    function test_latch_survivesDisputeHeartbeatAndUpgrade() public {
+        _stdAsset(ASSET);
+        _release(ASSET);
+        _disp(4); // B2: dispute after the window, before any share, still wins ...
+        assertFalse(_rel(ASSET));
+        vm.prank(owner);
+        r.cancel(vid, _d()); // ... and a cancel voids a non-latched asset
+        _release(ASSET);
+        _submit(0); // latch
+        _disp(4);
+        assertTrue(_rel(ASSET), "dispute after latch");
+        assertEq(uint8(_st(ASSET)), uint8(R.Status.Releasable));
+        _at(_now() + 1);
+        _att(0, Reason.DECEASED, A1); // B3: upgrade after latch
+        assertTrue(_rel(ASSET), "upgrade after latch");
+        _hb();
+        assertTrue(_rel(ASSET), "heartbeat after latch");
+        assertEq(uint8(_st(ASSET)), uint8(R.Status.Releasable));
+        _submit(1); // shares keep flowing
+        vm.prank(benef);
+        r.markClaimed(vid, ASSET, _d());
+        assertEq(uint8(_st(ASSET)), uint8(R.Status.Claimed));
     }
 
     function test_submitShare_reverts() public {
@@ -365,6 +431,7 @@ contract UnitTest is Base {
     function test_markClaimed_ok() public {
         _stdAsset(ASSET);
         _release(ASSET);
+        _submit(0);
         vm.expectEmit(true, true, false, true);
         emit Claimed(vid, ASSET, _k(benef));
         vm.prank(benef);
@@ -385,6 +452,9 @@ contract UnitTest is Base {
         vm.expectRevert(R.NotClaimant.selector);
         vm.prank(contBenef);
         r.markClaimed(vid, ASSET, _d());
+        vm.expectRevert(R.NoShares.selector); // N5: no share submitted yet
+        vm.prank(benef);
+        r.markClaimed(vid, ASSET, _d());
         vm.expectRevert(R.NoAsset.selector);
         vm.prank(benef);
         r.markClaimed(vid, keccak256("nope"), _d());
@@ -393,6 +463,7 @@ contract UnitTest is Base {
     function test_claimed_isSticky_afterCancel() public {
         _stdAsset(ASSET);
         _release(ASSET);
+        _submit(0);
         vm.prank(benef);
         r.markClaimed(vid, ASSET, _d());
         _hb();
@@ -508,6 +579,7 @@ contract UnitTest is Base {
                 vm.revertToState(snap);
             }
         }
+        _submit(0);
         // markClaimed: Role.Any, so the claimant check rejects everyone but the primary beneficiary
         bytes memory mc = abi.encodeCall(R.markClaimed, (vid, ASSET, _d()));
         for (uint256 c; c < 4; ++c) {

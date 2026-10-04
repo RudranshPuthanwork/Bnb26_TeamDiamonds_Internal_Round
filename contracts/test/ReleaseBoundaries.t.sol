@@ -35,7 +35,7 @@ contract ReleaseBoundariesTest is Base {
 
     function test_silenceBound_table() public {
         uint32[4] memory minIn = [uint32(3), 3, 30, 5];
-        uint32[4] memory win = [uint32(0), 2, 7, 1];
+        uint32[4] memory win = [uint32(1), 2, 7, 1];
         for (uint256 i; i < 4; ++i) {
             vid = _newVault();
             _at(T0 + i * 1000);
@@ -46,7 +46,7 @@ contract ReleaseBoundariesTest is Base {
             _attMany(0, 3, Reason.DECEASED, 0); // quorum at h+1, long before silence
             uint256 s = h + minIn[i];
             assertEq(uint8(_stAt(ASSET, s - 1)), uint8(R.Status.Armed));
-            assertEq(uint8(_stAt(ASSET, s)), win[i] == 0 ? uint8(R.Status.Releasable) : uint8(R.Status.Cooling));
+            assertEq(uint8(_stAt(ASSET, s)), uint8(R.Status.Cooling));
             _edge(ASSET, s + win[i]);
         }
     }
@@ -66,7 +66,7 @@ contract ReleaseBoundariesTest is Base {
 
     function test_quorumBound_table() public {
         uint8[4] memory ks = [uint8(1), 2, 3, 4];
-        uint32[2] memory ws = [uint32(0), 3];
+        uint32[2] memory ws = [uint32(1), 3];
         for (uint256 i; i < 4; ++i) {
             for (uint256 j; j < 2; ++j) {
                 vid = _newVault();
@@ -105,7 +105,7 @@ contract ReleaseBoundariesTest is Base {
     // ───────── evidence (D6) ─────────
 
     function test_evidence_noPair_neverReleases() public {
-        _add(ASSET, _pol(0x06, 3, true, 3, 0, 0));
+        _add(ASSET, _pol(0x06, 3, true, 3, 1, 0));
         _hb();
         uint256 h = _now();
         _at(h + 10);
@@ -117,7 +117,7 @@ contract ReleaseBoundariesTest is Base {
     }
 
     function test_evidence_zeroHashesDoNotPair() public {
-        _add(ASSET, _pol(0x06, 3, true, 3, 0, 0));
+        _add(ASSET, _pol(0x06, 3, true, 3, 1, 0));
         _hb();
         _at(_now() + 10);
         _attMany(0, 4, Reason.DECEASED, 0);
@@ -160,7 +160,7 @@ contract ReleaseBoundariesTest is Base {
 
     function test_evidence_countReachedBeforePair() public {
         // k=2: g0 A1 @t1, g1 A2 @t2 -> count ok, no pair; g2 A1 @t3 completes pair {g0,g2}
-        _add(ASSET, _pol(0x06, 2, true, 3, 0, 0));
+        _add(ASSET, _pol(0x06, 2, true, 3, 1, 0));
         _hb();
         uint256 h = _now();
         _at(h + 10);
@@ -171,11 +171,11 @@ contract ReleaseBoundariesTest is Base {
         _at(h + 12);
         _att(2, Reason.DECEASED, A1);
         assertEq(_tl(ASSET).tQuorum, h + 12);
-        _edge(ASSET, h + 12);
+        _edge(ASSET, h + 12 + 1);
     }
 
     function test_evidence_notRequired_ignoresHashes() public {
-        _add(ASSET, _pol(0x06, 3, false, 3, 0, 0));
+        _add(ASSET, _pol(0x06, 3, false, 3, 1, 0));
         _hb();
         uint256 h = _now();
         _at(h + 10);
@@ -183,11 +183,11 @@ contract ReleaseBoundariesTest is Base {
         _att(1, Reason.DECEASED, A2);
         _att(2, Reason.DECEASED, A3);
         assertEq(_tl(ASSET).tQuorum, h + 10);
-        _edge(ASSET, h + 10);
+        _edge(ASSET, h + 10 + 1);
     }
 
     function test_evidence_addedByReattest_resetsAt() public {
-        _add(ASSET, _pol(0x06, 3, true, 3, 0, 0));
+        _add(ASSET, _pol(0x06, 3, true, 3, 1, 0));
         _hb();
         uint256 h = _now();
         _at(h + 10);
@@ -198,7 +198,7 @@ contract ReleaseBoundariesTest is Base {
         _at(h + 21);
         _att(1, Reason.DECEASED, A1); // pair; all three still valid, kth smallest at = 21 (g2 @10, g0 @20, g1 @21)
         assertEq(_tl(ASSET).tQuorum, h + 21);
-        _edge(ASSET, h + 21);
+        _edge(ASSET, h + 21 + 1);
     }
 
     // ───────── planned absence ─────────
@@ -359,7 +359,7 @@ contract ReleaseBoundariesTest is Base {
     }
 
     function test_mask_missingOnly() public {
-        _add(ASSET, _pol(0x08, 2, false, 3, 0, 0));
+        _add(ASSET, _pol(0x08, 2, false, 3, 1, 0));
         _hb();
         uint256 h = _now();
         _at(h + 10);
@@ -436,5 +436,64 @@ contract ReleaseBoundariesTest is Base {
         assertTrue(_rel(med));
         assertFalse(_rel(ltr));
         assertFalse(_rel(cry));
+    }
+
+    // ───────── D14: dispute override ─────────
+
+    // B1a: kAttest = n-1, the disputer abstains: kDispute = min(kAttest+1, n-1) = 4 is reachable by the other four.
+    function test_dispute_kDisputeCappedAtNMinusOne_disputerAbstains() public {
+        _add(ASSET, _pol(0x06, 4, false, 3, 2, 5));
+        _at(_now() + 1);
+        _disp(4);
+        _at(_now() + 1);
+        for (uint256 i; i < 4; ++i) {
+            _att(i, Reason.DECEASED, 0);
+        }
+        _at(_now() + 10_000);
+        assertTrue(_rel(ASSET), "one guardian blocked release forever");
+    }
+
+    // the disputer's own post-dispute attestation is excluded from the override count
+    function test_dispute_disputerAttestationDoesNotCount() public {
+        _add(ASSET, _pol(0x06, 3, false, 3, 2, 5)); // kDispute = 4
+        _at(_now() + 1);
+        _attMany(0, 3, Reason.DECEASED, A1);
+        _at(_now() + 1);
+        _disp(3);
+        _at(_now() + 1);
+        for (uint256 i; i < 3; ++i) {
+            _att(i, Reason.DECEASED, A1); // re-affirm
+        }
+        _att(3, Reason.DECEASED, A1); // disputer: ignored
+        _at(_now() + 10_000);
+        assertFalse(_rel(ASSET), "3 non-disputers are not kDispute=4");
+        _att(4, Reason.DECEASED, A1);
+        assertEq(_tl(ASSET).resumeAt, _now());
+        _at(_now() + 10_000);
+        assertTrue(_rel(ASSET));
+    }
+
+    // B1b: attesters from before the dispute can re-affirm exactly once, and that counts as fresh
+    function test_dispute_reaffirmCountsForOverride_onceOnly() public {
+        _add(ASSET, _pol(0x06, 3, false, 3, 2, 5));
+        _at(_now() + 1);
+        _attMany(0, 3, Reason.DECEASED, A1);
+        vm.expectRevert(R.AttestationLocked.selector); // no dispute: D5 stands
+        _att(0, Reason.DECEASED, A1);
+        _at(_now() + 1);
+        _disp(3);
+        _at(_now() + 1);
+        vm.expectRevert(R.AttestationLocked.selector); // never a downgrade
+        _att(0, Reason.INCAPACITATED, A1);
+        _att(0, Reason.DECEASED, A1);
+        vm.expectRevert(R.AttestationLocked.selector); // once
+        _att(0, Reason.DECEASED, A1);
+        _att(1, Reason.DECEASED, A1);
+        _att(2, Reason.DECEASED, A1);
+        _at(_now() + 10_000);
+        assertFalse(_rel(ASSET), "3 fresh of kDispute=4");
+        _att(4, Reason.DECEASED, A1);
+        _at(_now() + 10_000);
+        assertTrue(_rel(ASSET), "4 fresh");
     }
 }
