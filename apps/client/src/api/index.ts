@@ -16,6 +16,7 @@ export const chainClient: ChainClient | null = USING_MOCK
       registry: env.VITE_REGISTRY_ADDRESS as `0x${string}`,
       deployBlock: BigInt(env.VITE_DEPLOY_BLOCK ?? 0),
       chainId: Number(env.VITE_CHAIN_ID ?? 31337),
+      relayerUrl: env.VITE_RELAYER_URL || undefined,
     });
 
 export const api: ChainApi = chainClient ?? mockApi;

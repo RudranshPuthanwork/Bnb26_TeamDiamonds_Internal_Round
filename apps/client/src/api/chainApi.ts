@@ -2,16 +2,18 @@ import {
   createPublicClient,
   createWalletClient,
   defineChain,
+  encodeFunctionData,
   hexToBytes,
   http,
   bytesToHex,
   parseEventLogs,
-  zeroAddress,
+  toHex,
   zeroHash,
   type Address,
   type PublicClient,
 } from 'viem';
 import { heirloomRegistryAbi as abi } from '@heirloom/abi';
+import { Action, DIRECT_AUTH, eoaKeyId, fetchDomain, fetchNonce, signAction, type Auth, type Domain } from '@heirloom/auth';
 import {
   beneficiaryReconstruct,
   drillCheck,
@@ -46,15 +48,26 @@ import { defaultBundleStore, type BundleStore } from './bundleStore';
 import { defaultKv, type Kv } from './localKv';
 import { accountFor, accountIndexForRole } from '../dev/devSigner';
 import { DevKeystore } from '../dev/keystore';
+import { COPY } from '../copy';
 
 export interface ChainConfig {
   rpcUrl: string;
   registry: Address;
   deployBlock: bigint;
   chainId: number;
+  /** VITE_RELAYER_URL. Set: signed EOA_SIG calls go through the relayer. Unset: DIRECT. */
+  relayerUrl?: string;
 }
 
-const AUTH = { kind: 0, signer: zeroAddress, nonce: 0n, deadline: 0n, sig: '0x' } as const; // DIRECT: msg.sender
+/** The relayer answered with an error or did not answer. `relayName` is the contract error name when known. */
+export class RelayError extends Error {
+  constructor(readonly relayName: string, detail: string) {
+    super(`${relayName}: ${detail}`);
+    this.name = 'RelayError';
+  }
+}
+
+const SIGNATURE_TTL = 600n; // seconds; short, because a signed payload can be replayed by any relayer until then (review 1c N4)
 const SECRET_FILE = 'heirloom-item.bin';
 
 const unb64 = (s: string) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
@@ -84,6 +97,10 @@ export class ChainClient implements ChainApi {
   private accountIndex = 0;
   private guardianNumber = 1;
   private failNext = false;
+  /** True after a relayer outage (not a contract revert). The UI offers direct submission; the user decides. */
+  relayerFailed = false;
+  private direct = false;
+  private domain?: Domain;
   private unit: number | null = null;
   private blockTimes = new Map<bigint, number>();
   private claims = new Map<string, ClaimCache>();
@@ -139,24 +156,78 @@ export class ChainClient implements ChainApi {
     return (await this.pub.readContract({ address: this.cfg.registry, abi, functionName, args } as never)) as T;
   }
 
-  private async w(functionName: string, args: unknown[]) {
+  /** The user's explicit choice after a relayer failure: the next write goes straight from the wallet. */
+  chooseDirect() {
+    this.direct = true;
+    this.relayerFailed = false;
+  }
+
+  /**
+   * The single submit path. `build` puts the Auth into the call's args. With a relayer the call is signed
+   * (EOA_SIG) and posted; a relayer failure is thrown, never retried directly (see chooseDirect).
+   */
+  private async w(
+    functionName: string,
+    action: Action,
+    vaultId: Hex32,
+    params: Record<string, unknown>,
+    build: (auth: Auth) => unknown[]
+  ) {
     if (this.failNext) {
       this.failNext = false;
       throw new Error('The chain did not answer. Nothing was changed. Retry, or submit directly from a wallet.');
     }
     const account = accountFor(this.accountIndex);
-    const { request } = await this.pub.simulateContract({
-      address: this.cfg.registry,
-      abi,
-      functionName,
-      args,
-      account,
-    } as never);
-    const wallet = createWalletClient({ account, chain: this.chain, transport: http(this.cfg.rpcUrl) });
-    const hash = await wallet.writeContract(request as never);
+    let hash: Hex32;
+    if (this.cfg.relayerUrl && !this.direct) {
+      hash = await this.relay(functionName, build(await this.sign(account, action, vaultId, params)));
+    } else {
+      this.direct = false;
+      const { request } = await this.pub.simulateContract({
+        address: this.cfg.registry,
+        abi,
+        functionName,
+        args: build(DIRECT_AUTH),
+        account,
+      } as never);
+      const wallet = createWalletClient({ account, chain: this.chain, transport: http(this.cfg.rpcUrl) });
+      hash = (await wallet.writeContract(request as never)) as Hex32;
+    }
     const receipt = await this.pub.waitForTransactionReceipt({ hash });
     if (receipt.status !== 'success') throw new Error('The transaction reverted.');
-    return { hash: hash as Hex32, receipt };
+    return { hash, receipt };
+  }
+
+  private async sign(account: ReturnType<typeof accountFor>, action: Action, vaultId: Hex32, params: Record<string, unknown>) {
+    this.domain ??= await fetchDomain(this.pub, this.cfg.registry);
+    const [nonce, block] = await Promise.all([
+      fetchNonce(this.pub, this.cfg.registry, eoaKeyId(account.address)),
+      this.pub.getBlock({ blockTag: 'latest' }), // chain time, not wall clock: anvil time can be warped
+    ]);
+    return signAction(account, this.domain, action, vaultId, params, nonce, block.timestamp + SIGNATURE_TTL);
+  }
+
+  private async relay(functionName: string, args: unknown[]): Promise<Hex32> {
+    const data = encodeFunctionData({ abi, functionName, args } as never);
+    let res: Response;
+    try {
+      res = await fetch(`${this.cfg.relayerUrl}/relay`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chainId: this.cfg.chainId, to: this.cfg.registry, data }),
+      });
+    } catch {
+      this.relayerFailed = true;
+      throw new RelayError('Unreachable', 'the relayer did not answer');
+    }
+    const body = (await res.json().catch(() => ({}))) as { txHash?: Hex32; error?: { name?: string; message?: string } };
+    if (res.ok && body.txHash) {
+      this.relayerFailed = false;
+      return body.txHash;
+    }
+    const name = body.error?.name ?? 'Unreachable';
+    this.relayerFailed = !(name in COPY.errors.reverts); // a contract revert would fail the same way directly
+    throw new RelayError(name, body.error?.message ?? `HTTP ${res.status}`);
   }
 
   private async timeUnit() {
@@ -427,7 +498,16 @@ export class ChainClient implements ChainApi {
   // ---------- owner writes ----------
 
   async createVault(owners: readonly [Hex32, Hex32], guardians: Hex32[], t: number, policyDelay: number) {
-    const { receipt } = await this.w('createVault', [owners, guardians, t, await this.toUnits(policyDelay), AUTH]);
+    const units = await this.toUnits(policyDelay);
+    // The digest binds vaultId = vaultCount + 1 (review 1c N6); a front-run vault makes this BadAuth, so retry re-signs.
+    const next = toHex((await this.r<bigint>('vaultCount')) + 1n, { size: 32 });
+    const { receipt } = await this.w('createVault', Action.CreateVault, next, { owners, guardians, t, policyDelay: units }, (a) => [
+      owners,
+      guardians,
+      t,
+      units,
+      a,
+    ]);
     const ev = parseEventLogs({ abi, logs: receipt.logs, eventName: 'VaultCreated' }) as unknown as {
       args: { vaultId: Hex32 };
     }[];
@@ -435,19 +515,19 @@ export class ChainClient implements ChainApi {
   }
 
   async heartbeat(vaultId: Hex32) {
-    return (await this.w('heartbeat', [vaultId, AUTH])).hash;
+    return (await this.w('heartbeat', Action.Heartbeat, vaultId, {}, (a) => [vaultId, a])).hash;
   }
 
   async cancel(vaultId: Hex32) {
-    return (await this.w('cancel', [vaultId, AUTH])).hash;
+    return (await this.w('cancel', Action.Cancel, vaultId, {}, (a) => [vaultId, a])).hash;
   }
 
   async setAbsence(vaultId: Hex32, until: number) {
-    return (await this.w('setAbsence', [vaultId, until, AUTH])).hash;
+    return (await this.w('setAbsence', Action.SetAbsence, vaultId, { until }, (a) => [vaultId, until, a])).hash;
   }
 
   async revokeChange(vaultId: Hex32, changeId: Hex32) {
-    return (await this.w('revokeChange', [vaultId, changeId, AUTH])).hash;
+    return (await this.w('revokeChange', Action.RevokeChange, vaultId, {}, (a) => [vaultId, changeId, a])).hash;
   }
 
   async addAsset(
@@ -487,7 +567,12 @@ export class ChainClient implements ChainApi {
       version: 1,
       shareCommitments: commitments,
     };
-    const { hash } = await this.w('addAsset', [vaultId, item.assetId, policy, AUTH]);
+    const { hash } = await this.w('addAsset', Action.AddAsset, vaultId, { assetId: item.assetId, policy }, (a) => [
+      vaultId,
+      item.assetId,
+      policy,
+      a,
+    ]);
     const meta: Meta = { accession: item.accessionNumber, title: item.title, contents: item.contents };
     this.kv.set(`heirloom.meta.${item.assetId}`, JSON.stringify(meta));
     return hash;
@@ -548,11 +633,11 @@ export class ChainClient implements ChainApi {
   }
 
   async attest(vaultId: Hex32, reason: Reason, evidenceHash: Hex32 = zeroHash) {
-    return (await this.w('attest', [vaultId, reason, evidenceHash, AUTH])).hash;
+    return (await this.w('attest', Action.Attest, vaultId, { reason, evidenceHash }, (a) => [vaultId, reason, evidenceHash, a])).hash;
   }
 
   async dispute(vaultId: Hex32) {
-    return (await this.w('dispute', [vaultId, AUTH])).hash;
+    return (await this.w('dispute', Action.Dispute, vaultId, {}, (a) => [vaultId, a])).hash;
   }
 
   async submitShare(vaultId: Hex32, assetId: Hex32) {
@@ -566,7 +651,9 @@ export class ChainClient implements ChainApi {
     const card = bundle.participants.beneficiaries.map(cardFromWire).find((c) => keyIdOf(c).toLowerCase() === claimant.toLowerCase());
     if (!card) throw new Error('The claimant is not listed in the sealed bundle.');
     const enc = await guardianReencrypt(opened, card.encPk, { vaultId, assetId, version: policy.version, claimantKeyId: claimant });
-    return (await this.w('submitShare', [vaultId, assetId, claimant, bytesToHex(enc), AUTH])).hash;
+    const encShare = bytesToHex(enc);
+    const params = { assetId, claimantKeyId: claimant, encShare };
+    return (await this.w('submitShare', Action.SubmitShare, vaultId, params, (a) => [vaultId, assetId, claimant, encShare, a])).hash;
   }
 
   /** On-chain drill() is a stub until Phase 7, so the drill runs locally and only a boolean leaves. */
@@ -652,6 +739,6 @@ export class ChainClient implements ChainApi {
   }
 
   async markClaimed(vaultId: Hex32, assetId: Hex32) {
-    return (await this.w('markClaimed', [vaultId, assetId, AUTH])).hash;
+    return (await this.w('markClaimed', Action.MarkClaimed, vaultId, { assetId }, (a) => [vaultId, assetId, a])).hash;
   }
 }

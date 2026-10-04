@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest run",
     "audit:design": "node scripts/audit-design.mjs",
     "audit:copy": "node scripts/audit-copy.mjs"
   },
@@ -16,6 +17,7 @@
     "@fontsource/gloock": "^5.3.0",
     "@fontsource/source-serif-4": "^5.3.0",
     "@heirloom/abi": "*",
+    "@heirloom/auth": "*",
     "@heirloom/crypto": "*",
     "@tanstack/react-query": "^5.104.1",
     "react": "^19.2.8",
