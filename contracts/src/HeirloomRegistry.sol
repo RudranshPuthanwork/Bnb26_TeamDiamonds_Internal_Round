@@ -79,7 +79,13 @@ contract HeirloomRegistry is EIP712 {
 
     struct PendingChange {
         uint40 applyAfter;
-        bytes32 payloadHash;
+        uint8 kind;
+        bytes data;
+    }
+
+    struct Drill {
+        uint16 version;
+        uint40 at;
     }
 
     struct Vault {
@@ -94,7 +100,7 @@ contract HeirloomRegistry is EIP712 {
         uint8 disputer;
         uint32 policyDelay;
         mapping(uint32 => mapping(uint8 => Attestation)) att;
-        mapping(uint8 => uint40) lastDrill;
+        mapping(uint8 => Drill) lastDrill;
         mapping(bytes32 => AssetPolicy) assets;
         mapping(bytes32 => bool) claimed;
         mapping(bytes32 => bool) released; // D14 latch
@@ -313,22 +319,36 @@ contract HeirloomRegistry is EIP712 {
     }
 
     /// @notice Queue a loosening change (section 5.6). Phase 7.
-    function queueChange(bytes32, bytes32, bytes calldata, Auth calldata) external pure {
+    /// @param vaultId Vault.
+    /// @param changeId Caller-chosen id.
+    /// @param kind Change kind.
+    /// @param data Kind-specific payload.
+    /// @param auth Owner authorisation.
+    function queueChange(bytes32 vaultId, bytes32 changeId, uint8 kind, bytes calldata data, Auth calldata auth)
+        external
+    {
         revert NotImplemented();
     }
 
     /// @notice Apply a queued change after `policyDelay`. Phase 7.
-    function applyChange(bytes32, bytes32, Auth calldata) external pure {
+    function applyChange(bytes32 vaultId, bytes32 changeId, Auth calldata auth) external {
         revert NotImplemented();
     }
 
     /// @notice Revoke a queued change. Phase 7.
-    function revokeChange(bytes32, bytes32, Auth calldata) external pure {
+    function revokeChange(bytes32 vaultId, bytes32 changeId, Auth calldata auth) external {
         revert NotImplemented();
     }
 
     /// @notice Re-key an asset to a new bundle/version. Phase 7.
-    function rekey(bytes32, bytes32, uint16, bytes32, bytes32[] calldata, Auth calldata) external pure {
+    function rekey(
+        bytes32 vaultId,
+        bytes32 assetId,
+        uint16 version,
+        bytes32 newBundleCid,
+        bytes32[] calldata newCommitments,
+        Auth calldata auth
+    ) external {
         revert NotImplemented();
     }
 
@@ -400,7 +420,7 @@ contract HeirloomRegistry is EIP712 {
     }
 
     /// @notice Record a readiness drill. Phase 7.
-    function drill(bytes32, uint16, Auth calldata) external pure {
+    function drill(bytes32 vaultId, uint16 version, Auth calldata auth) external {
         revert NotImplemented();
     }
 
@@ -425,7 +445,7 @@ contract HeirloomRegistry is EIP712 {
     }
 
     /// @notice Contingent beneficiary claim after `claimDeadline`. Phase 7.
-    function claimContingent(bytes32, bytes32, Auth calldata) external pure {
+    function claimContingent(bytes32 vaultId, bytes32 assetId, Auth calldata auth) external {
         revert NotImplemented();
     }
 
@@ -548,6 +568,98 @@ contract HeirloomRegistry is EIP712 {
         if (tQuorum != 0) {
             opensAt = tOpen + uint256(a.window) * TIME_UNIT;
             claimDeadline = opensAt + uint256(a.claimDeadline) * TIME_UNIT;
+        }
+    }
+
+    // ───────────────────────────── read surface (empty data returns zeros, never reverts) ─────────────────────────────
+
+    function getVault(bytes32 vaultId)
+        external
+        view
+        returns (
+            bytes32[2] memory owners,
+            bytes32[] memory guardians,
+            uint8 t,
+            uint32 policyDelay,
+            uint32 epoch,
+            uint40 lastHeartbeat,
+            uint40 absentUntil,
+            uint40 disputedAt,
+            uint32 disputeEpoch,
+            uint8 disputer
+        )
+    {
+        Vault storage v = _v[vaultId];
+        return (
+            v.owners,
+            v.guardians,
+            v.t,
+            v.policyDelay,
+            v.epoch,
+            v.lastHeartbeat,
+            v.absentUntil,
+            v.disputedAt,
+            v.disputeEpoch,
+            v.disputer
+        );
+    }
+
+    function getAsset(bytes32 vaultId, bytes32 assetId)
+        external
+        view
+        returns (AssetPolicy memory policy, bool released, bool claimed)
+    {
+        Vault storage v = _v[vaultId];
+        return (v.assets[assetId], v.released[assetId], v.claimed[assetId]);
+    }
+
+    /// @notice Current-epoch attestation of guardian `guardianIndex`; zeros if none.
+    function getAttestation(bytes32 vaultId, uint8 guardianIndex)
+        external
+        view
+        returns (Reason reason, uint40 at, bytes32 evidenceHash)
+    {
+        Vault storage v = _v[vaultId];
+        Attestation storage a = v.att[v.epoch][guardianIndex];
+        return (a.reason, a.at, a.evidenceHash);
+    }
+
+    function getShare(bytes32 vaultId, bytes32 assetId, bytes32 claimantKeyId, uint8 guardianIndex)
+        external
+        view
+        returns (bytes memory)
+    {
+        return _v[vaultId].shares[assetId][claimantKeyId][guardianIndex];
+    }
+
+    function lastDrill(bytes32 vaultId, uint8 guardianIndex) external view returns (uint16 version, uint40 at) {
+        Drill storage d = _v[vaultId].lastDrill[guardianIndex];
+        return (d.version, d.at);
+    }
+
+    /// @notice Guardians whose last drill was for exactly `version`.
+    function readyGuardians(bytes32 vaultId, uint16 version) external view returns (uint8 ready) {
+        Vault storage v = _v[vaultId];
+        for (uint8 i; i < v.guardians.length; ++i) {
+            Drill storage d = v.lastDrill[i];
+            if (d.at != 0 && d.version == version) ++ready;
+        }
+    }
+
+    /// @notice Empty until Phase 7 (queueChange is a stub).
+    function getPendingChange(bytes32 vaultId, bytes32 changeId)
+        external
+        view
+        returns (uint8 kind, bytes memory data, uint40 applyAfter, bool exists)
+    {
+        PendingChange storage c = _v[vaultId].queued[changeId];
+        return (c.kind, c.data, c.applyAfter, c.applyAfter != 0);
+    }
+
+    function guardianIndex(bytes32 vaultId, bytes32 keyId_) external view returns (bool found, uint8 index) {
+        bytes32[] storage g = _v[vaultId].guardians;
+        for (uint256 i; i < g.length; ++i) {
+            if (g[i] == keyId_) return (true, uint8(i));
         }
     }
 }

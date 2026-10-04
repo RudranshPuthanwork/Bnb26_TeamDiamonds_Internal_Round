@@ -13,7 +13,7 @@ contract StubsTest is Base {
 
     function _all() internal view returns (bytes[6] memory c) {
         bytes32 cid = bytes32(uint256(1));
-        c[0] = abi.encodeCall(R.queueChange, (vid, cid, hex"01", _d()));
+        c[0] = abi.encodeCall(R.queueChange, (vid, cid, uint8(1), hex"01", _d()));
         c[1] = abi.encodeCall(R.applyChange, (vid, cid, _d()));
         c[2] = abi.encodeCall(R.revokeChange, (vid, cid, _d()));
         c[3] = abi.encodeCall(R.drill, (vid, uint16(1), _d()));
