@@ -8,8 +8,12 @@ import { combine } from "shamir-secret-sharing";
 import {
   beneficiaryReconstruct, drillCheck, generateIdentity, guardianOpenShare, guardianReencrypt, keyIdOf,
   ReconstructError, rekeyAsset, sealAsset, verifyShare,
-  type Bundle, type Hex32, type IdentityCard, type Identity, type Rng, type Submission,
+  type Bundle, type Hex32, type IdentityCard, type Identity, type Submission,
 } from "../src/index.js";
+import * as pub from "../src/index.js";
+import { b64u, unb64u } from "../src/core.js";
+import * as seededApi from "../src/testing.js";
+import type { Rng } from "../src/testing.js";
 
 const VAULT = ("0x" + "11".repeat(32)) as Hex32;
 const ASSET = ("0x" + "22".repeat(32)) as Hex32;
@@ -34,7 +38,7 @@ const seeded = (seed: string): Rng => {
 
 type Party = Identity & { card: IdentityCard };
 const party = async (k: number, rng?: Rng): Promise<Party> => {
-  const id = await generateIdentity(rng);
+  const id = await seededApi.generateIdentity(rng);
   return { ...id, card: { kind: 0, a: num(k), b: num(0), encPk: id.encPk } };
 };
 const parties = (from: number, n: number, rng?: Rng) => Promise.all(Array.from({ length: n }, (_, k) => party(from + k, rng)));
@@ -43,7 +47,7 @@ async function setup(n: number, t: number, o: { rng?: Rng; version?: number; ass
   const gs = await parties(100, n, o.rng);
   const [ben] = await parties(900, 1, o.rng);
   const ctx = { vaultId: o.vaultId ?? VAULT, assetId: o.assetId ?? ASSET, version: o.version ?? 1 };
-  const sealed = await sealAsset({ ...ctx, plaintext: PT, guardians: gs.map((g) => g.card), t, beneficiaries: [ben!.card], rng: o.rng });
+  const sealed = await seededApi.sealAsset({ ...ctx, plaintext: PT, guardians: gs.map((g) => g.card), t, beneficiaries: [ben!.card] }, o.rng);
   return { gs, ben: ben!, ctx, ...sealed };
 }
 /** Guardian-side: open and re-encrypt shares of `idx` (1-based) to the beneficiary. */
@@ -69,7 +73,7 @@ const flip = (b64: string, byte = 5) => {
   return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 };
 const open = (s: Awaited<ReturnType<typeof setup>>, subs: Submission[], t: number, bundle = s.bundle, commitments = s.commitments) =>
-  beneficiaryReconstruct({ bundle, mySk: s.ben.encSk, submissions: subs, commitments, t });
+  beneficiaryReconstruct({ bundle, mySk: s.ben.encSk, submissions: subs, commitments, t, expect: bundle });
 
 describe("1. round trip", () => {
   for (let t = 2; t <= 4; t++)
@@ -187,7 +191,7 @@ describe("5. tamper never yields wrong plaintext", () => {
     await expect(open(s, subs, 2, kbEnc)).rejects.toThrow();
     const g = { ...s.bundle, guardians: s.bundle.guardians.map((x) => (x.i === 1 ? { ...x, enc: flip(x.enc, 60) } : x)) };
     await expect(guardianOpenShare(g, 1, s.gs[0]!.encSk)).rejects.toThrow();
-    expect(await drillCheck(g, 1, s.gs[0]!.encSk, s.commitments[0]!)).toBe(false);
+    expect(await drillCheck(g, 1, s.gs[0]!.encSk, s.commitments[0]!, s.ctx)).toBe(false);
     subs[0]!.enc[10] ^= 1;
     await expect(open(s, subs, 2)).rejects.toMatchObject({ rejected: [{ guardianIndex: 1 }] });
   });
@@ -201,9 +205,9 @@ describe("5. tamper never yields wrong plaintext", () => {
   });
   it("drillCheck is true for the right guardian and wrong for another key or commitment", async () => {
     const s = await setup(4, 2);
-    expect(await drillCheck(s.bundle, 2, s.gs[1]!.encSk, s.commitments[1]!)).toBe(true);
-    expect(await drillCheck(s.bundle, 2, s.gs[0]!.encSk, s.commitments[1]!)).toBe(false);
-    expect(await drillCheck(s.bundle, 2, s.gs[1]!.encSk, s.commitments[0]!)).toBe(false);
+    expect(await drillCheck(s.bundle, 2, s.gs[1]!.encSk, s.commitments[1]!, s.ctx)).toBe(true);
+    expect(await drillCheck(s.bundle, 2, s.gs[0]!.encSk, s.commitments[1]!, s.ctx)).toBe(false);
+    expect(await drillCheck(s.bundle, 2, s.gs[1]!.encSk, s.commitments[0]!, s.ctx)).toBe(false);
   });
   it("setup rejects beneficiary == guardian", async () => {
     const [g1, g2] = await parties(1, 2);
@@ -264,7 +268,7 @@ describe("7. fixed vectors", () => {
   it("committed bundle still opens to the committed plaintext", async () => {
     const v = JSON.parse(readFileSync(path, "utf8"));
     const r = await beneficiaryReconstruct({
-      bundle: v.bundle, mySk: unhex(v.beneficiarySk), commitments: v.commitments, t: v.t,
+      bundle: v.bundle, mySk: unhex(v.beneficiarySk), commitments: v.commitments, t: v.t, expect: v.ctx,
       submissions: v.submissions.map((x: { guardianIndex: number; enc: string }) => ({ guardianIndex: x.guardianIndex, enc: unhex(x.enc) })),
     });
     expect(hex(r.plaintext)).toBe(v.plaintext);
@@ -285,5 +289,80 @@ describe("7. fixed vectors", () => {
     expect(again.bundle.beneficiaries).toEqual(v.bundle.beneficiaries);
     expect(again.bundle.participants).toEqual(v.bundle.participants);
     expect(again.guardianSks).toEqual(v.guardianSks);
+  });
+});
+
+describe("9. review 2b fixes (D15)", () => {
+  it("B1: 10 MB seal/open round trip", async () => {
+    const pt = new Uint8Array(10 * 1024 * 1024).map((_, i) => (i * 31) & 255);
+    const gs = await parties(100, 3), [ben] = await parties(900, 1);
+    const sealed = await sealAsset({ vaultId: VAULT, assetId: ASSET, version: 1, plaintext: pt, guardians: gs.map((g) => g.card), t: 2, beneficiaries: [ben!.card] });
+    const s = { gs, ben: ben!, ctx: { vaultId: VAULT, assetId: ASSET, version: 1 }, ...sealed };
+    const r = await open(s, await submit(s.bundle, gs, ben!, [1, 3]), 2);
+    expect(Buffer.compare(r.plaintext, pt)).toBe(0);
+  }, 60_000);
+  it("B1: 50 MB b64u round trip", () => {
+    const b = new Uint8Array(50 * 1024 * 1024).map((_, i) => (i * 7) & 255);
+    expect(Buffer.compare(unb64u(b64u(b)), b)).toBe(0);
+  }, 60_000);
+  it("S1: public API has no rng parameter and ignores a smuggled one", async () => {
+    expect([pub.generateIdentity.length, pub.sealAsset.length, pub.rekeyAsset.length]).toEqual([0, 1, 1]);
+    const gen = pub.generateIdentity as (r?: Rng) => ReturnType<typeof pub.generateIdentity>;
+    expect((await gen(seeded("x"))).encSk).not.toEqual((await gen(seeded("x"))).encSk);
+    const gs = await parties(1, 2), [ben] = await parties(9, 1);
+    const input = { vaultId: VAULT, assetId: ASSET, version: 1, plaintext: PT, guardians: gs.map((g) => g.card), t: 2, beneficiaries: [ben!.card] };
+    const [a, b] = [await sealAsset({ ...input, rng: seeded("x") } as typeof input), await sealAsset({ ...input, rng: seeded("x") } as typeof input)];
+    expect(a.bundle.C).not.toBe(b.bundle.C);
+  });
+  it("S2: invalid submission for index i then a valid one for i still succeeds", async () => {
+    const s = await setup(4, 2);
+    const [a, b] = await submit(s.bundle, s.gs, s.ben, [1, 2]);
+    const bad = { guardianIndex: 1, enc: a!.enc.map((x, k) => (k === 40 ? x ^ 1 : x)) };
+    const r = await open(s, [bad, a!, b!], 2);
+    expect(r.plaintext).toEqual(PT);
+    expect(r.usedIndexes).toEqual([1, 2]);
+    expect(r.rejected).toEqual([{ guardianIndex: 1, reason: "bad-ciphertext" }]);
+  });
+  it("S3: t=1, t above n, and t below the real threshold give ReconstructError with rejected", async () => {
+    const s = await setup(5, 3);
+    const subs = await submit(s.bundle, s.gs, s.ben, [1, 2, 3, 4]);
+    for (const t of [1, 6]) {
+      await expect(open(s, subs, t)).rejects.toBeInstanceOf(ReconstructError);
+      await expect(open(s, subs, t)).rejects.toMatchObject({ rejected: [] });
+    }
+    const bad = subs.map((x) => (x.guardianIndex === 4 ? { ...x, enc: x.enc.map((y, k) => (k === 40 ? y ^ 1 : y)) } : x));
+    const err = await open(s, bad, 2).catch((e) => e);
+    expect(err).toBeInstanceOf(ReconstructError);
+    expect(err.rejected).toEqual([{ guardianIndex: 4, reason: "bad-ciphertext" }]);
+  });
+  it("S4: verifyShare rejects wrong-length share or salt (no byte shifting)", async () => {
+    const s = await setup(3, 2);
+    const o = await guardianOpenShare(s.bundle, 1, s.gs[0]!.encSk);
+    expect(verifyShare(s.commitments[0]!, o.share, o.salt, s.ctx, 1)).toBe(true);
+    expect(verifyShare(s.commitments[0]!, new Uint8Array([...o.share, o.salt[0]!]), o.salt.slice(1), s.ctx, 1)).toBe(false);
+    expect(verifyShare(s.commitments[0]!, o.share.slice(0, 32), new Uint8Array(33), s.ctx, 1)).toBe(false);
+  });
+  it("S5: expect is required; hex case does not matter", async () => {
+    const s = await setup(3, 2, { vaultId: ("0x" + "ab".repeat(32)) as Hex32, assetId: ("0x" + "cd".repeat(32)) as Hex32 });
+    const subs = await submit(s.bundle, s.gs, s.ben, [1, 2]);
+    const base = { bundle: s.bundle, mySk: s.ben.encSk, submissions: subs, commitments: s.commitments, t: 2 };
+    // @ts-expect-error expect is required
+    await expect(beneficiaryReconstruct(base)).rejects.toBeInstanceOf(ReconstructError);
+    const up = (h: Hex32) => ("0x" + h.slice(2).toUpperCase()) as Hex32;
+    const upperExpect = { ...s.ctx, vaultId: up(s.ctx.vaultId), assetId: up(s.ctx.assetId) };
+    expect((await beneficiaryReconstruct({ ...base, expect: s.ctx })).plaintext).toEqual(PT);
+    expect((await beneficiaryReconstruct({ ...base, expect: upperExpect })).plaintext).toEqual(PT);
+    const upBundle = { ...s.bundle, vaultId: up(s.bundle.vaultId), assetId: up(s.bundle.assetId) };
+    expect((await beneficiaryReconstruct({ ...base, bundle: upBundle, expect: s.ctx })).plaintext).toEqual(PT);
+    expect(await drillCheck(s.bundle, 1, s.gs[0]!.encSk, s.commitments[0]!, upperExpect)).toBe(true);
+    expect(await drillCheck(s.bundle, 1, s.gs[0]!.encSk, s.commitments[0]!, { ...s.ctx, version: 2 })).toBe(false);
+  });
+  it("S6: duplicate encPk is rejected across guardians and beneficiaries", async () => {
+    const [g1, g2, g3] = await parties(1, 3), [ben] = await parties(9, 1);
+    const base = { vaultId: VAULT, assetId: ASSET, version: 1, plaintext: PT, t: 2 };
+    const twin = (p: Party, k: number): IdentityCard => ({ ...p.card, a: num(k) });
+    await expect(sealAsset({ ...base, guardians: [g1!.card, twin(g1!, 50), g3!.card], beneficiaries: [ben!.card] })).rejects.toThrow(/encPk/);
+    await expect(sealAsset({ ...base, guardians: [g1!.card, g2!.card, g3!.card], beneficiaries: [twin(g2!, 51)] })).rejects.toThrow(/encPk/);
+    await expect(rekeyAsset({ ...base, newGuardians: [g1!.card, g2!.card], newBeneficiaries: [twin(g2!, 52)] })).rejects.toThrow(/encPk/);
   });
 });

@@ -83,6 +83,11 @@ Re-splitting the *same* `K_g` is **not enough**. The removed guardian's old shar
 
 We are explicit about the limit: data that was already handed out cannot be cryptographically revoked. That is exactly why the split-knowledge design matters. A removed guardian who kept old shares *still* needs the beneficiary's old `K_b`. It is also why we use IPFS (unpinnable) rather than Arweave (permanent) for ciphertext.
 
+### 4.7 Known limits
+
+- **N4, plaintext length leaks.** `C` is the plaintext length plus 28 bytes (12 IV + 16 tag) and is stored publicly on IPFS. Its size reveals the plaintext length class (a 12-word seed phrase versus a PDF). We do not pad. Accepted for v1.
+- **N5, re-key does not stop collusion over old data.** A re-key keeps the plaintext and guardian X25519 keys, so a retained guardian can re-derive their old share from any cached copy of the old bundle. A removed beneficiary plus *t* old-version guardians who kept the old bundle, colluding off-protocol, can still open the old `C`, which holds the current plaintext. Unpinning the old CID is the only defence.
+
 ---
 
 ## 8. Failure handling matrix (Guardians, Shares & Drills)
