@@ -1,13 +1,12 @@
 :root {
-  /* Palette */
-  --color-paper: #E4DCC6;
-  --color-ink: #1E1A15;
-  --color-accent: #1C6B5A;
-  --color-error: #8A2E1A;
-  --color-ink-secondary: rgba(30, 26, 21, 0.7);
-  --color-ink-rule: rgba(30, 26, 21, 0.45);
-  --color-rule: rgba(30, 26, 21, 0.45);
-  --color-rule-light: rgba(30, 26, 21, 0.2);
+  /* Palette (Amendment A2) */
+  --color-paper: #FFFFFF;
+  --color-ink: #15181C;
+  --color-ink-hover: #2B3036;
+  --color-ink-secondary: #4A5058;
+  --color-rule: #D5D8DC;
+  --color-hover-fill: #F2F3F4;
+  --color-error: #A32A2A;
 
   /* Fonts */
   --font-display: 'Gloock', serif;
@@ -26,6 +25,7 @@
 
   /* Typography measures */
   --measure-body: 62ch;
+  --container-max: 72rem;
   --line-height-body: 1.5;
   --letter-spacing-headline: -0.02em;
 

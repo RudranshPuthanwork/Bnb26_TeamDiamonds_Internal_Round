@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import {
   Accession,
   Button,
@@ -11,13 +10,6 @@ import {
 import { COPY } from '../copy';
 
 export const DevTokensPage: React.FC = () => {
-  const headerLinks = (
-    <>
-      <Link to="/">{COPY.nav.register}</Link>
-      <Link to="/dev/states">{COPY.nav.devStates}</Link>
-    </>
-  );
-
   const typeSteps = [
     { label: '0.8rem (xs)', size: 'var(--text-xs)', sample: 'Margin labels and running header', font: 'var(--font-body)' },
     { label: '1.0rem (sm / base body)', size: 'var(--text-sm)', sample: 'The register records item titles, restriction rules, and attestations.', font: 'var(--font-body)' },
@@ -30,19 +22,17 @@ export const DevTokensPage: React.FC = () => {
   ];
 
   const palette = [
-    { name: 'Paper', token: 'var(--color-paper)', desc: 'Surface background, warm historical ledger tone' },
-    { name: 'Ink', token: 'var(--color-ink)', desc: 'Primary typography, boundaries, solid stamps' },
-    { name: 'Accent (Verdigris)', token: 'var(--color-accent)', desc: 'Primary action and single releasable state stamp' },
-    { name: 'Ink Secondary (70%)', token: 'var(--color-ink-secondary)', desc: 'Meta annotations, accession notes, sublines' },
-    { name: 'Ink Rule (45%)', token: 'var(--color-rule)', desc: 'Horizontal surface separating rules, table dividers' },
-    { name: 'Error (Umber)', token: 'var(--color-error)', desc: 'Strictly limited to active error notices and corrective hints' },
+    { name: 'Page', token: 'var(--color-paper)', desc: 'Surface background, white' },
+    { name: 'Ink', token: 'var(--color-ink)', desc: 'Primary text, borders, primary button fill' },
+    { name: 'Ink secondary', token: 'var(--color-ink-secondary)', desc: 'Annotations and sublines' },
+    { name: 'Rule', token: 'var(--color-rule)', desc: 'Hairline rules and table dividers' },
+    { name: 'Error', token: 'var(--color-error)', desc: 'Error text and error rule only' },
   ];
 
   return (
     <div style={{ padding: 'var(--space-6) var(--space-8)' }}>
       <ScreenHeader
         title={COPY.nav.devTokens}
-        links={headerLinks}
       />
 
       {/* Type Scale */}
@@ -106,7 +96,7 @@ export const DevTokensPage: React.FC = () => {
       >
         <h2>Color Palette</h2>
         <p style={{ color: 'var(--color-ink-secondary)', marginBottom: 'var(--space-4)' }}>
-          Strict material palette: paper, ink, verdigris accent, secondary ink, and tuned umber error.
+          Strict material palette: white page, ink, secondary ink, hairline rule, and error red.
         </p>
 
         <div

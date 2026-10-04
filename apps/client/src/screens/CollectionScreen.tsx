@@ -4,18 +4,16 @@ import {
   Accession,
   Actions,
   Button,
-  DevFooter,
   DotLeaderList,
   Empty,
   ErrorNote,
-  Footnote,
   Hash,
   LedgerTable,
   Loading,
   Page,
   Rule,
   ScreenHeader,
-  Stamp,
+  StatusText,
   Timestamp,
 } from '../ui';
 import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
@@ -59,7 +57,6 @@ export const CollectionScreen: React.FC = () => {
       <Page>
         <ScreenHeader title={COPY.header.defaultCollection} />
         <Loading />
-        <DevFooter />
       </Page>
     );
   }
@@ -72,7 +69,6 @@ export const CollectionScreen: React.FC = () => {
           message={error ?? COPY.states.error}
           action={<Button onClick={loadData}>{COPY.actions.retry}</Button>}
         />
-        <DevFooter />
       </Page>
     );
   }
@@ -96,12 +92,6 @@ export const CollectionScreen: React.FC = () => {
     <Page>
       <ScreenHeader
         title={COPY.header.defaultCollection}
-        links={
-          <>
-            <Link to="/guardians">{COPY.nav.guardians}</Link>
-            <Link to="/changes">{COPY.nav.changes}</Link>
-          </>
-        }
       />
 
       <DotLeaderList items={summaryItems} />
@@ -156,7 +146,7 @@ export const CollectionScreen: React.FC = () => {
                 </td>
                 <td>{Math.round(item.policy.window / 86400)} d</td>
                 <td>
-                  <Stamp status={item.status} />
+                  <StatusText status={item.status} />
                 </td>
               </tr>
             ))}
@@ -165,8 +155,6 @@ export const CollectionScreen: React.FC = () => {
       )}
 
       <Rule />
-      <Footnote />
-      <DevFooter />
     </Page>
   );
 };

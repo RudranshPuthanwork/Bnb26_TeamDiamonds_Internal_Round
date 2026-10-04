@@ -1,17 +1,16 @@
 .fieldGroup {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  column-gap: var(--space-4);
-  row-gap: var(--space-2);
-  margin-bottom: var(--space-6);
-  width: 100%;
-}
-
-.labelCol {
-  grid-column: 1 / span 2;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  margin-bottom: var(--space-6);
+  width: 100%;
+  max-width: 44rem;
+}
+
+.labelCol {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
 }
 
 .label {
@@ -28,9 +27,9 @@
 }
 
 .inputCol {
-  grid-column: 3 / -1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .input {
@@ -72,11 +71,3 @@
   color: var(--color-error);
 }
 
-@media (max-width: 768px) {
-  .labelCol {
-    grid-column: 1 / -1;
-  }
-  .inputCol {
-    grid-column: 1 / -1;
-  }
-}

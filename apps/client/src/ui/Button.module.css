@@ -25,32 +25,30 @@
   cursor: not-allowed;
 }
 
-/* Primary: accent fill, inverts to ink on hover */
+/* Primary: ink fill, white text */
 .primary {
-  background-color: var(--color-accent);
-  color: var(--color-paper);
-  border-color: var(--color-accent);
-}
-
-.primary:hover:not(:disabled) {
   background-color: var(--color-ink);
   color: var(--color-paper);
   border-color: var(--color-ink);
 }
 
-/* Secondary: 1px ink border, fills ink on hover */
+.primary:hover:not(:disabled) {
+  background-color: var(--color-ink-hover);
+  border-color: var(--color-ink-hover);
+}
+
+/* Secondary: 1px ink border, white fill, light grey on hover */
 .secondary {
-  background-color: transparent;
+  background-color: var(--color-paper);
   color: var(--color-ink);
   border: 1px solid var(--color-ink);
 }
 
 .secondary:hover:not(:disabled) {
-  background-color: var(--color-ink);
-  color: var(--color-paper);
+  background-color: var(--color-hover-fill);
 }
 
-/* Tertiary: underlined text, underline thickens 1px -> 2px on hover */
+/* Tertiary: underlined text, underline thickens on hover */
 .tertiary {
   background-color: transparent;
   color: var(--color-ink);

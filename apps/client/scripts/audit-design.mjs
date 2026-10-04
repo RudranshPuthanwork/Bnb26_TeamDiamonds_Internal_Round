@@ -35,6 +35,8 @@ const FORBIDDEN_WORDS = [
   { name: 'box-shadow', regex: /\bbox-shadow\b/i },
   { name: 'backdrop-filter', regex: /\bbackdrop-filter\b/i },
   { name: 'filter: blur', regex: /filter\s*:\s*[^;}]*blur/i },
+  { name: 'accent token', regex: /accent/i },
+  { name: 'border-style trick (dashed/double/groove/ridge)', regex: /border[a-z-]*\s*:[^;]*\b(dashed|double|groove|ridge|inset|outset)\b/i },
 ];
 
 // 6. Icon libraries

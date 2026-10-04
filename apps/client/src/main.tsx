@@ -7,9 +7,12 @@ import '@fontsource/azeret-mono/400.css';
 import './styles/tokens.css';
 import './styles/global.css';
 import App from './App';
+import { RoleProvider } from './role';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <RoleProvider>
+      <App />
+    </RoleProvider>
   </StrictMode>
 );

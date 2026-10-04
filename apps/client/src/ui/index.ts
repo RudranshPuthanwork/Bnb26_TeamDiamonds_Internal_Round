@@ -1,7 +1,7 @@
 export * from './Margin';
 export * from './ScreenHeader';
 export * from './Rule';
-export * from './Stamp';
+export * from './Status';
 export * from './RestrictionLine';
 export * from './LedgerTable';
 export * from './Field';
@@ -22,5 +22,5 @@ export * from './Notice';
 export * from './Actions';
 export * from './Section';
 export * from './Footnote';
-export * from './DevFooter';
 export * from './CheckboxGroup';
+export * from './AppHeader';

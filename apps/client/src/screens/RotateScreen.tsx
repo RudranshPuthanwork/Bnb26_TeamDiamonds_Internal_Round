@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Actions,
   Button,
   Checklist,
-  DevFooter,
   Empty,
   ErrorNote,
   Loading,
@@ -54,7 +53,6 @@ export const RotateScreen: React.FC = () => {
       <Page>
         <ScreenHeader title={COPY.rotate.pageTitle} />
         <Loading />
-        <DevFooter />
       </Page>
     );
   }
@@ -75,7 +73,6 @@ export const RotateScreen: React.FC = () => {
             }
           />
         )}
-        <DevFooter />
       </Page>
     );
   }
@@ -107,15 +104,6 @@ export const RotateScreen: React.FC = () => {
     <Page>
       <ScreenHeader
         title={COPY.rotate.pageTitle}
-        page={item.accessionNumber}
-        links={
-          <>
-            <Link to={`/item/${encodeURIComponent(item.accessionNumber)}`}>
-              {item.accessionNumber}
-            </Link>
-            <Link to="/">{COPY.nav.register}</Link>
-          </>
-        }
       />
 
       <Margin margin={COPY.rotate.marginLabel}>
@@ -136,7 +124,6 @@ export const RotateScreen: React.FC = () => {
       </Actions>
 
       <Rule />
-      <DevFooter />
     </Page>
   );
 };

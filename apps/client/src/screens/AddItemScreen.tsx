@@ -4,7 +4,6 @@ import {
   Actions,
   Button,
   CheckboxGroup,
-  DevFooter,
   ErrorNote,
   Field,
   Loading,
@@ -201,7 +200,6 @@ export const AddItemScreen: React.FC = () => {
       <Page>
         <ScreenHeader title={COPY.addItem.pageTitle} />
         <Loading />
-        <DevFooter />
       </Page>
     );
   }
@@ -374,8 +372,6 @@ export const AddItemScreen: React.FC = () => {
           </Button>
         </Actions>
       </form>
-
-      <DevFooter />
     </Page>
   );
 };

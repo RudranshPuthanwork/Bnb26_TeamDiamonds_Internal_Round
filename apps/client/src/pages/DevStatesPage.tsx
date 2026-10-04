@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import {
   Accession,
   Empty,
@@ -9,7 +8,7 @@ import {
   RestrictionLine,
   Rule,
   ScreenHeader,
-  Stamp,
+  StatusText,
 } from '../ui';
 import { Status, STATUS_NAMES } from '../api/types';
 import { COPY } from '../copy';
@@ -26,33 +25,24 @@ const ALL_STATUSES = [
 ];
 
 export const DevStatesPage: React.FC = () => {
-  const headerLinks = (
-    <>
-      <Link to="/">{COPY.nav.register}</Link>
-      <Link to="/dev/tokens">{COPY.nav.devTokens}</Link>
-    </>
-  );
-
   return (
     <div style={{ padding: 'var(--space-6) var(--space-8)' }}>
       <ScreenHeader
         title={COPY.nav.devStates}
-        links={headerLinks}
       />
 
-      {/* Section 1: All eight state stamps */}
+      {/* Section 1: All eight statuses */}
       <Margin
         margin={
           <div>
             <Accession number="DEV-01/STAMPS" />
-            <div style={{ marginTop: 'var(--space-1)' }}>Eight States</div>
+            <div style={{ marginTop: 'var(--space-1)' }}>Eight statuses</div>
           </div>
         }
       >
-        <h2>State Stamps</h2>
+        <h2>Status text</h2>
         <p style={{ color: 'var(--color-ink-secondary)', marginBottom: 'var(--space-4)' }}>
-          State stamps always use text labels, never color alone. Specific border styles
-          signal active protocol conditions.
+          Status is plain text. Releasable and Claimed are semibold.
         </p>
 
         <div
@@ -73,7 +63,7 @@ export const DevStatesPage: React.FC = () => {
               }}
             >
               <div style={{ marginBottom: 'var(--space-2)' }}>
-                <Stamp status={status} />
+                <StatusText status={status} />
               </div>
               <div
                 style={{
@@ -107,7 +97,7 @@ export const DevStatesPage: React.FC = () => {
         {ALL_STATUSES.map((status) => (
           <div key={status} style={{ marginBottom: 'var(--space-6)' }}>
             <div style={{ marginBottom: 'var(--space-1)' }}>
-              <Stamp status={status} />
+              <StatusText status={status} />
             </div>
             <RestrictionLine status={status} />
             <Rule />

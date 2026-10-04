@@ -3,7 +3,6 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Actions,
   Button,
-  DevFooter,
   DotLeaderList,
   Empty,
   ErrorNote,
@@ -17,7 +16,7 @@ import {
   Rule,
   ScreenHeader,
   Section,
-  Stamp,
+  StatusText,
   Timestamp,
 } from '../ui';
 import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
@@ -123,7 +122,6 @@ export const ItemDetailScreen: React.FC = () => {
       <Page>
         <ScreenHeader title={item?.title ?? COPY.header.itemDetail} />
         <Loading />
-        <DevFooter />
       </Page>
     );
   }
@@ -136,7 +134,6 @@ export const ItemDetailScreen: React.FC = () => {
           message={error}
           action={<Button onClick={loadItem}>{COPY.actions.retry}</Button>}
         />
-        <DevFooter />
       </Page>
     );
   }
@@ -153,7 +150,6 @@ export const ItemDetailScreen: React.FC = () => {
             </Button>
           }
         />
-        <DevFooter />
       </Page>
     );
   }
@@ -246,14 +242,6 @@ export const ItemDetailScreen: React.FC = () => {
     <Page>
       <ScreenHeader
         title={item.title}
-        page={item.accessionNumber}
-        links={
-          <>
-            <Link to="/">{COPY.nav.register}</Link>
-            <Link to="/guardians">{COPY.nav.guardians}</Link>
-            <Link to="/changes">{COPY.nav.changes}</Link>
-          </>
-        }
       />
 
       {/* Restriction Line per Amendment A1: value loud Gloock, label body-size */}
@@ -320,9 +308,9 @@ export const ItemDetailScreen: React.FC = () => {
               <td>{COPY.itemDetail.silenceLabel}</td>
               <td>Inactivity &gt; {Math.round(item.policy.minInactivity / 86400)} d</td>
               <td>
-                <Stamp status={isSilent ? Status.Silent : Status.Sealed}>
+                <StatusText status={isSilent ? Status.Silent : Status.Sealed}>
                   {isSilent ? COPY.itemDetail.silenceSilent : COPY.itemDetail.silenceActive}
-                </Stamp>
+                </StatusText>
               </td>
               <td>
                 <Timestamp value="02 Oct 2026, 14:07 UTC" />
@@ -334,9 +322,9 @@ export const ItemDetailScreen: React.FC = () => {
                 {timeline.attestationsFiled} of {item.quorumOf} filed (threshold {item.policy.kAttest})
               </td>
               <td>
-                <Stamp status={isQuorumReached ? Status.Cooling : Status.Armed}>
+                <StatusText status={isQuorumReached ? Status.Cooling : Status.Armed}>
                   {isQuorumReached ? COPY.itemDetail.quorumReached : COPY.itemDetail.quorumPending}
-                </Stamp>
+                </StatusText>
               </td>
               <td>
                 {isQuorumReached ? (
@@ -350,9 +338,9 @@ export const ItemDetailScreen: React.FC = () => {
               <td>{COPY.itemDetail.windowLabel}</td>
               <td>Window = {Math.round(item.policy.window / 86400)} d</td>
               <td>
-                <Stamp status={item.status}>
+                <StatusText status={item.status}>
                   {windowStatus}
-                </Stamp>
+                </StatusText>
               </td>
               <td>
                 {item.status === Status.Cooling ? (
@@ -402,7 +390,6 @@ export const ItemDetailScreen: React.FC = () => {
       </Section>
 
       <Rule />
-      <DevFooter />
     </Page>
   );
 };

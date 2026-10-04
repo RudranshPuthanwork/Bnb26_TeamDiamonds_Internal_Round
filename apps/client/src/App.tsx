@@ -10,6 +10,7 @@ import {
   RotateScreen,
 } from './screens';
 import { Page, Loading } from './ui';
+import { Layout } from './Layout';
 
 // Dev routes: code-split so production builds exclude them from the primary bundle
 const DevStatesPage = React.lazy(() =>
@@ -35,6 +36,7 @@ export function App() {
         }
       >
         <Routes>
+          <Route element={<Layout />}>
           <Route path="/" element={<CollectionScreen />} />
           <Route path="/create" element={<CreateCollectionScreen />} />
           <Route path="/item/new" element={<AddItemScreen />} />
@@ -51,6 +53,7 @@ export function App() {
           )}
 
           <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
         </Routes>
       </Suspense>
     </HashRouter>

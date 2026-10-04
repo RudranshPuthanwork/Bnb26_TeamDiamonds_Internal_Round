@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Button,
-  DevFooter,
   Empty,
   ErrorNote,
   LedgerTable,
@@ -59,7 +57,6 @@ export const ChangesScreen: React.FC = () => {
       <Page>
         <ScreenHeader title={COPY.changes.pageTitle} />
         <Loading />
-        <DevFooter />
       </Page>
     );
   }
@@ -72,7 +69,6 @@ export const ChangesScreen: React.FC = () => {
           message={error}
           action={<Button onClick={loadData}>{COPY.actions.retry}</Button>}
         />
-        <DevFooter />
       </Page>
     );
   }
@@ -89,12 +85,6 @@ export const ChangesScreen: React.FC = () => {
     <Page>
       <ScreenHeader
         title={COPY.changes.pageTitle}
-        links={
-          <>
-            <Link to="/">{COPY.nav.register}</Link>
-            <Link to="/guardians">{COPY.nav.guardians}</Link>
-          </>
-        }
       />
 
       <Margin margin={COPY.changes.marginLabel}>
@@ -138,7 +128,6 @@ export const ChangesScreen: React.FC = () => {
       )}
 
       <Rule />
-      <DevFooter />
     </Page>
   );
 };

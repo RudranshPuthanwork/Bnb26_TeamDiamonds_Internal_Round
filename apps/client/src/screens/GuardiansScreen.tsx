@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Button,
-  DevFooter,
   DotLeaderList,
   Empty,
   ErrorNote,
@@ -14,7 +12,7 @@ import {
   Page,
   Rule,
   ScreenHeader,
-  Stamp,
+  StatusText,
   Timestamp,
 } from '../ui';
 import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
@@ -49,7 +47,6 @@ export const GuardiansScreen: React.FC = () => {
       <Page>
         <ScreenHeader title={COPY.guardians.pageTitle} />
         <Loading />
-        <DevFooter />
       </Page>
     );
   }
@@ -62,7 +59,6 @@ export const GuardiansScreen: React.FC = () => {
           message={error ?? COPY.states.error}
           action={<Button onClick={loadData}>{COPY.actions.retry}</Button>}
         />
-        <DevFooter />
       </Page>
     );
   }
@@ -81,12 +77,6 @@ export const GuardiansScreen: React.FC = () => {
     <Page>
       <ScreenHeader
         title={COPY.guardians.pageTitle}
-        links={
-          <>
-            <Link to="/">{COPY.nav.register}</Link>
-            <Link to="/changes">{COPY.nav.changes}</Link>
-          </>
-        }
       />
 
       <Margin margin={COPY.guardians.marginLabel}>
@@ -126,9 +116,9 @@ export const GuardiansScreen: React.FC = () => {
                   <Timestamp value="18 Oct 2026, 14:00 UTC" />
                 </td>
                 <td>
-                  <Stamp status={g.ready ? Status.Sealed : Status.Disputed}>
+                  <StatusText status={g.ready ? Status.Sealed : Status.Disputed}>
                     {g.ready ? COPY.guardians.ready : COPY.guardians.notReady}
-                  </Stamp>
+                  </StatusText>
                 </td>
               </tr>
             ))}
@@ -137,7 +127,6 @@ export const GuardiansScreen: React.FC = () => {
       )}
 
       <Rule />
-      <DevFooter />
     </Page>
   );
 };

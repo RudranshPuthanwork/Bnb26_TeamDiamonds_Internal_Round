@@ -1,4 +1,11 @@
 .page {
+  max-width: var(--container-max);
+  margin: 0 auto;
   padding: var(--space-6) var(--space-8);
-  max-width: 64rem;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: var(--space-4);
+  }
 }

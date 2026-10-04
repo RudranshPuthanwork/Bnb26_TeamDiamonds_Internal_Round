@@ -4,7 +4,6 @@ import { keccak256, encodeAbiParameters } from 'viem';
 import {
   Actions,
   Button,
-  DevFooter,
   ErrorNote,
   Field,
   Loading,
@@ -217,7 +216,6 @@ export const CreateCollectionScreen: React.FC = () => {
       <Page>
         <ScreenHeader title={COPY.createCollection.pageTitle} />
         <Loading />
-        <DevFooter />
       </Page>
     );
   }
@@ -318,8 +316,6 @@ export const CreateCollectionScreen: React.FC = () => {
           </Button>
         </Actions>
       </form>
-
-      <DevFooter />
     </Page>
   );
 };
