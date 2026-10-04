@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "dev:deploy": "node scripts/dev-deploy.mjs",
-    "walk": "tsx scripts/walk-scenario1.ts"
+    "walk": "tsx scripts/walk-scenario1.ts",
+    "smoke:services": "tsx scripts/smoke-services.mjs"
   }
 }

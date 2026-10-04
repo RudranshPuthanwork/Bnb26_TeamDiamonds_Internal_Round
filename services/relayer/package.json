@@ -1,0 +1,9 @@
+{
+  "name": "@heirloom/relayer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "tsx src/index.ts", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@heirloom/abi": "*", "express": "^5.1.0", "viem": "^2.57.2" },
+  "devDependencies": { "@types/express": "^5.0.0", "@types/node": "^24.13.3", "tsx": "^4.20.0", "typescript": "^7.0.2" }
+}

@@ -110,7 +110,7 @@ export class ChainClient implements ChainApi {
     deps: { bundles?: BundleStore; kv?: Kv; keystore?: DevKeystore } = {}
   ) {
     this.kv = deps.kv ?? defaultKv();
-    this.bundles = deps.bundles ?? defaultBundleStore();
+    this.bundles = deps.bundles ?? defaultBundleStore({ relayerUrl: cfg.relayerUrl });
     this.keystore = deps.keystore ?? new DevKeystore(this.kv);
     this.pub = createPublicClient({ chain: this.chain, transport: http(cfg.rpcUrl) }) as PublicClient;
   }

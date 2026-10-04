@@ -1,0 +1,11 @@
+{
+  "name": "@heirloom/storage",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "@heirloom/crypto": "*", "viem": "^2.57.2" },
+  "devDependencies": { "typescript": "^7.0.2" }
+}

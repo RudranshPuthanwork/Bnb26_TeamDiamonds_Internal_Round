@@ -19,6 +19,7 @@
     "@heirloom/abi": "*",
     "@heirloom/auth": "*",
     "@heirloom/crypto": "*",
+    "@heirloom/storage": "*",
     "@tanstack/react-query": "^5.104.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
