@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Accession, Empty, LedgerTable, Screen, StatusText } from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { api, getVaultId } from '../api';
 import { Reason, REASON_NAMES } from '../api/types';
 import type { GuardianNotice } from '../api/types';
 import { useLoad } from '../hooks';
@@ -16,7 +16,7 @@ function mine(n: GuardianNotice): string {
 
 export const GuardianNoticesScreen: React.FC = () => {
   const navigate = useNavigate();
-  const { data, loading, error, reload } = useLoad(() => api.listGuardianNotices(DEFAULT_VAULT_ID), []);
+  const { data, loading, error, reload } = useLoad(() => api.listGuardianNotices(getVaultId()), []);
   const c = COPY.guardianNotices;
 
   return (

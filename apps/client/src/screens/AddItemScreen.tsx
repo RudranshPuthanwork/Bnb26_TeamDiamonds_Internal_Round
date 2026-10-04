@@ -12,8 +12,12 @@ import {
   NumberedList,
   Page,
   ScreenHeader,
+  TextareaField,
 } from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { zeroHash } from 'viem';
+import { api, chainClient, getVaultId } from '../api';
+import { describeError, type Described } from '../errors';
+import { ACCOUNT } from '../dev/devSigner';
 import type { Hex32, Vault } from '../api/types';
 import { COPY } from '../copy';
 
@@ -103,13 +107,26 @@ export const AddItemScreen: React.FC = () => {
   );
 
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<Described | null>(null);
+  const [secret, setSecret] = useState<string>('');
 
   useEffect(() => {
-    api.getVault(DEFAULT_VAULT_ID).then((v) => {
-      setVault(v);
-      setLoading(false);
-    });
+    const id = getVaultId();
+    Promise.all([api.getVault(id), api.listAssets(id)])
+      .then(([v, items]) => {
+        setVault(v);
+        const vaultNo = String(Number(BigInt(id)) || 7).padStart(4, '0');
+        setAccession(`HL-${vaultNo}/${String(items.length + 1).padStart(2, '0')}`);
+      })
+      .catch((err) => setSubmitError(describeError(err)))
+      .finally(() => setLoading(false));
+    // On a local chain the dev accounts are the beneficiaries.
+    if (chainClient) {
+      void Promise.all([ACCOUNT.beneficiary, ACCOUNT.contingent].map((i) => chainClient!.keystore.keyId(i))).then(([p, c]) => {
+        setPrimaryBenef(p);
+        setContingentBenef(c);
+      });
+    }
   }, []);
 
   const n = vault ? vault.guardians.length : 5;
@@ -135,10 +152,12 @@ export const AddItemScreen: React.FC = () => {
   const isWindowBlocked = windowDays === 0;
 
   const reasonsMask =
-    (incapacitated ? 1 : 0) | (deceased ? 2 : 0) | (missing ? 4 : 0);
+    (incapacitated ? 2 : 0) | (deceased ? 4 : 0) | (missing ? 8 : 0);
 
   const isFormValid =
     title.trim().length > 0 &&
+    secret.length > 0 &&
+    /^0x[0-9a-fA-F]{64}$/.test(primaryBenef) &&
     accession.trim().length > 0 &&
     reasonsMask > 0 &&
     !isKAttestBlocked &&
@@ -173,7 +192,7 @@ export const AddItemScreen: React.FC = () => {
           window: windowDays * 86400,
           claimDeadline: claimDeadlineDays * 86400,
           primaryBenef: primaryBenef as Hex32,
-          contingentBenef: contingentBenef as Hex32,
+          contingentBenef: (contingentBenef.trim() === '' ? zeroHash : contingentBenef) as Hex32,
           bundleCid:
             '0x1220a4b7f8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5' as Hex32,
           version: 1,
@@ -185,11 +204,11 @@ export const AddItemScreen: React.FC = () => {
                 ).join('')) as Hex32
           ),
         },
-      });
+      }, new TextEncoder().encode(secret));
 
       navigate('/');
-    } catch {
-      setSubmitError(COPY.states.error);
+    } catch (err) {
+      setSubmitError(describeError(err));
     } finally {
       setSubmitting(false);
     }
@@ -214,7 +233,8 @@ export const AddItemScreen: React.FC = () => {
 
       {submitError && (
         <ErrorNote
-          message={submitError}
+          message={submitError.message}
+          fix={submitError.fix}
           action={<Button onClick={handleSubmit}>{COPY.actions.retry}</Button>}
         />
       )}
@@ -259,6 +279,14 @@ export const AddItemScreen: React.FC = () => {
           value={accession}
           onChange={(e) => setAccession(e.target.value)}
           required
+        />
+
+        <TextareaField
+          id="item-secret"
+          label={COPY.addItem.secretLabel}
+          hint={COPY.addItem.secretHint}
+          value={secret}
+          onChange={(e) => setSecret(e.target.value)}
         />
 
         <Field

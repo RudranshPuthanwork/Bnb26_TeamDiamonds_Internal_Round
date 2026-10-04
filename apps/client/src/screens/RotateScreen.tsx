@@ -12,7 +12,7 @@ import {
   Rule,
   ScreenHeader,
 } from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { api, getVaultId } from '../api';
 import type { AssetItem } from '../api/types';
 import { COPY } from '../copy';
 
@@ -27,7 +27,7 @@ export const RotateScreen: React.FC = () => {
   useEffect(() => {
     const decoded = decodeURIComponent(rawAccession ?? '');
     api
-      .listAssets(DEFAULT_VAULT_ID)
+      .listAssets(getVaultId())
       .then((assets) => {
         const found = assets.find((a) => {
           const normDecoded = decoded.toLowerCase().trim();

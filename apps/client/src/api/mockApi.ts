@@ -14,6 +14,7 @@ import type {
   RoleName,
   Timeline,
   Vault,
+  WireCard,
 } from './types';
 import { REASON_NAMES, Reason, Status } from './types';
 
@@ -222,7 +223,7 @@ export class MockChainApi implements ChainApi {
     this.vault.disputeEpoch = this.vault.epoch;
     [1, 2, 3].forEach((i, k) => this.mark(id(5), i, Reason.DECEASED, t0 - (12 - k) * DAY));
     this.shares.set(id(5), new Set([2, 3]));
-    this.rejected.set(id(5), [{ guardianIndex: 3, reason: 'Share did not match its commitment' }]);
+    this.rejected.set(id(5), [{ guardianIndex: 3, reason: 'commitment-mismatch' }]);
     this.event('Attested', g[1], { guardian: 2, reason: 'INCAPACITATED' }, t0 - 2 * DAY);
     this.event('Attested', g[2], { guardian: 3, reason: 'DECEASED' }, t0 - 1 * DAY);
     this.event('Disputed', g[3], { guardian: 4 }, t0 - 5 * DAY);
@@ -295,6 +296,14 @@ export class MockChainApi implements ChainApi {
     else if (this.filed(a.assetId) >= a.policy.kAttest) a.status = Status.Cooling;
     else if (this.filed(a.assetId) > 0) a.status = Status.Armed;
     else a.status = Status.Sealed;
+  }
+
+  async getOwnerKeys() {
+    return this.vault.owners;
+  }
+
+  rememberCards(_cards: WireCard[]) {
+    // The mock does not seal anything.
   }
 
   setRole(_role: RoleName) {

@@ -109,3 +109,16 @@
     gap: var(--space-4);
   }
 }
+
+.devRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.devRow select {
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius);
+  background: var(--color-paper);
+  padding: var(--space-1);
+}

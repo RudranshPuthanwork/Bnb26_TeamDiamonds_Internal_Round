@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Actions, Button, Checklist, Empty, Notice, Screen, TxNote } from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { api, getVaultId } from '../api';
 import type { ClaimProgress } from '../api/types';
 import { findByAccession } from '../format';
 import { useLoad, useTx } from '../hooks';
@@ -13,7 +13,7 @@ export const BeneficiaryClaimScreen: React.FC = () => {
   const { accession } = useParams<{ accession: string }>();
   const c = COPY.claim;
   const { data, loading, error, reload } = useLoad<ClaimProgress | null>(async () => {
-    const item = findByAccession(await api.listClaims(DEFAULT_VAULT_ID), accession);
+    const item = findByAccession(await api.listClaims(getVaultId()), accession);
     return item ? api.getClaimProgress(item.vaultId, item.assetId) : null;
   }, [accession], 4000);
 
@@ -74,7 +74,7 @@ export const BeneficiaryClaimScreen: React.FC = () => {
                   <>
                     <div>{c.collectingBody(data.received, data.t)}</div>
                     {data.rejected.map((r) => (
-                      <div key={r.guardianIndex}>{c.rejectedBody(r.guardianIndex, r.reason)}</div>
+                      <div key={r.guardianIndex}>{c.rejectedBody(r.guardianIndex, c.rejectReasons[r.reason] ?? r.reason)}</div>
                     ))}
                   </>
                 ),

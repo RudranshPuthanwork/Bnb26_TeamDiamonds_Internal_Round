@@ -2,12 +2,15 @@ import React from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import styles from './AppHeader.module.css';
 import { COPY } from '../copy';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { api, chainClient, getVaultId, setVaultId } from '../api';
 import { ROLE_HOME, useRole, type RoleName } from '../role';
+import { describeError } from '../errors';
+import { advanceTime } from '../dev/timeControl';
+import { seedDemoCollection } from '../dev/seed';
 
-const audit = { to: `/audit/${DEFAULT_VAULT_ID}`, label: COPY.nav.audit };
-
-const LINKS: Record<RoleName, { to: string; label: string; end?: boolean }[]> = {
+const links = (role: RoleName) => {
+  const audit = { to: `/audit/${getVaultId()}`, label: COPY.nav.audit };
+  return {
   owner: [
     { to: '/', label: COPY.nav.collection, end: true },
     { to: '/guardians', label: COPY.nav.guardians },
@@ -16,18 +19,49 @@ const LINKS: Record<RoleName, { to: string; label: string; end?: boolean }[]> = 
   ],
   guardian: [{ to: '/g', label: COPY.nav.notices, end: true }, audit],
   beneficiary: [{ to: '/b', label: COPY.nav.claims, end: true }, audit],
+  }[role] as { to: string; label: string; end?: boolean }[];
 };
 
+const ROLES: RoleName[] = ['owner', 'guardian', 'beneficiary'];
+
+const ADVANCE: { label: string; seconds: number }[] = [
+  { label: COPY.dev.advanceHour, seconds: 3600 },
+  { label: COPY.dev.advanceDay, seconds: 86400 },
+  { label: COPY.dev.advanceWeek, seconds: 7 * 86400 },
+  { label: COPY.dev.advanceMonth, seconds: 30 * 86400 },
+];
+
+/** Dev builds only. Role switcher, dev pages, failure toggle, and (on anvil) time and seed controls. */
 const DevMenu: React.FC = () => {
   const { role, setRole } = useRole();
   const navigate = useNavigate();
   const [failNext, setFailNext] = React.useState(api.isFailNextWrite());
+  const [busy, setBusy] = React.useState(false);
+  const [note, setNote] = React.useState('');
+  const [guardian, setGuardian] = React.useState(() => Number(localStorage.getItem('heirloom.dev.guardian') ?? 1));
+  const [seconds, setSeconds] = React.useState(86400);
+  const onAnvil = chainClient?.cfg.chainId === 31337;
+
+  const run = async (fn: () => Promise<unknown>, done: string) => {
+    setBusy(true);
+    setNote('');
+    try {
+      await fn();
+      setNote(done);
+      navigate(0);
+    } catch (e) {
+      setNote(describeError(e).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <details className={styles.dev}>
       <summary>{COPY.nav.dev}</summary>
       <div className={styles.devPanel}>
         <div className={styles.devGroup}>
-          {(Object.keys(LINKS) as RoleName[]).map((r) => (
+          {ROLES.map((r) => (
             <button
               key={r}
               type="button"
@@ -41,6 +75,26 @@ const DevMenu: React.FC = () => {
             </button>
           ))}
         </div>
+        {chainClient && (
+          <label className={styles.devRow}>
+            {COPY.dev.guardianLabel}
+            <select
+              value={guardian}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setGuardian(n);
+                localStorage.setItem('heirloom.dev.guardian', String(n));
+                chainClient!.setGuardianNumber(n);
+              }}
+            >
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <Link to="/dev/states">{COPY.nav.devStates}</Link>
         <Link to="/dev/tokens">{COPY.nav.devTokens}</Link>
         <button
@@ -51,6 +105,37 @@ const DevMenu: React.FC = () => {
         >
           {failNext ? COPY.dev.failNextOn : COPY.dev.failNextOff}
         </button>
+        {onAnvil && chainClient && (
+          <>
+            <div className={styles.devRow}>
+              <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}>
+                {ADVANCE.map((a) => (
+                  <option key={a.seconds} value={a.seconds}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={styles.devBtn}
+                disabled={busy}
+                onClick={() => run(() => advanceTime(chainClient!, seconds), COPY.dev.advanced)}
+              >
+                {COPY.dev.advance}
+              </button>
+            </div>
+            <button
+              type="button"
+              className={styles.devBtn}
+              disabled={busy}
+              onClick={() => run(async () => setVaultId(await seedDemoCollection(chainClient!)), COPY.dev.seeded)}
+            >
+              {COPY.dev.seed}
+            </button>
+          </>
+        )}
+        {busy && <span>{COPY.tx.pending}</span>}
+        {note && <span>{note}</span>}
       </div>
     </details>
   );
@@ -65,7 +150,7 @@ export const AppHeader: React.FC = () => {
           {COPY.brand.name}
         </Link>
         <nav className={styles.links}>
-          {LINKS[role].map((l) => (
+          {links(role).map((l) => (
             <NavLink
               key={l.to}
               to={l.to}

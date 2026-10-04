@@ -250,6 +250,10 @@ export interface ChainInfo {
 /** All durations crossing this interface are in seconds; adapters convert to TIME_UNIT. */
 export interface ChainApi {
   setRole(role: RoleName): void;
+  /** The signing account's own key and its backup owner key. */
+  getOwnerKeys(): Promise<readonly [Hex32, Hex32]>;
+  /** Remember pasted identity cards so the owner can seal to their holders (D1). */
+  rememberCards(cards: WireCard[]): void;
   getChainInfo(): Promise<ChainInfo>;
   getVault(vaultId: Hex32): Promise<Vault>;
   getAsset(

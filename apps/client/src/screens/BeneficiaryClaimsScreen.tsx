@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Accession, Empty, LedgerTable, Screen, StatusText } from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { api, getVaultId } from '../api';
 import { useLoad } from '../hooks';
 import { COPY } from '../copy';
 
@@ -9,7 +9,7 @@ export const BeneficiaryClaimsScreen: React.FC = () => {
   const navigate = useNavigate();
   const c = COPY.claims;
   const { data, loading, error, reload } = useLoad(async () => {
-    const items = await api.listClaims(DEFAULT_VAULT_ID);
+    const items = await api.listClaims(getVaultId());
     const progress = await Promise.all(items.map((i) => api.getClaimProgress(i.vaultId, i.assetId)));
     return items.map((item, k) => ({ item, step: progress[k]?.step ?? 'waiting' }));
   }, []);

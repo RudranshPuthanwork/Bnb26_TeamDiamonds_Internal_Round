@@ -13,7 +13,9 @@ import {
   ScreenHeader,
   TextareaField,
 } from '../ui';
-import { api } from '../api';
+import { api, chainClient, setVaultId } from '../api';
+import { describeError, type Described } from '../errors';
+import { devCardLines } from '../dev/seed';
 import type { Hex32, WireCard } from '../api/types';
 import { COPY } from '../copy';
 
@@ -118,7 +120,7 @@ export const CreateCollectionScreen: React.FC = () => {
   const [nInput, setNInput] = useState<number>(5);
   const [policyDelay, setPolicyDelay] = useState<number>(604800);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<Described | null>(null);
 
   const parsedGuardians = useMemo(() => {
     return guardiansText
@@ -182,9 +184,11 @@ export const CreateCollectionScreen: React.FC = () => {
     tInput >= 2 &&
     tInput <= nInput;
 
-  const handleFillSample = () => {
-    setGuardiansText(SAMPLE_GUARDIANS);
-    setBeneficiariesText(SAMPLE_BENEFICIARIES.join('\n'));
+  const handleFillSample = async () => {
+    // On a local chain the sample cards are the dev accounts' real identities, so the demo can run end to end.
+    const dev = chainClient ? await devCardLines(chainClient) : null;
+    setGuardiansText(dev ? dev.guardians.join('\n') : SAMPLE_GUARDIANS);
+    setBeneficiariesText(dev ? dev.beneficiaries.join('\n') : SAMPLE_BENEFICIARIES.join('\n'));
     setNInput(5);
     setTInput(3);
   };
@@ -197,15 +201,13 @@ export const CreateCollectionScreen: React.FC = () => {
     setSubmitError(null);
 
     try {
-      const owners: readonly [Hex32, Hex32] = [
-        '0x3d7b8849c719e3401fa990089e5a59dbca484102146973e8cb14c4c8108a7122',
-        '0x9c417f300184c7eb3901a5e42718cb498e103f19472304918734018fba817412',
-      ];
+      const owners = await api.getOwnerKeys();
       const guardianKeyIds = validGuardians.map((g) => g.keyId as Hex32);
-      await api.createVault(owners, guardianKeyIds, tInput, policyDelay);
+      api.rememberCards([...validGuardians, ...validBeneficiaries].map((p) => p.card as WireCard));
+      setVaultId(await api.createVault(owners, guardianKeyIds, tInput, policyDelay));
       navigate('/');
-    } catch {
-      setSubmitError(COPY.states.error);
+    } catch (err) {
+      setSubmitError(describeError(err));
     } finally {
       setSubmitting(false);
     }
@@ -230,7 +232,8 @@ export const CreateCollectionScreen: React.FC = () => {
 
       {submitError && (
         <ErrorNote
-          message={submitError}
+          message={submitError.message}
+          fix={submitError.fix}
           action={
             <Button onClick={handleSubmit}>{COPY.actions.retry}</Button>
           }

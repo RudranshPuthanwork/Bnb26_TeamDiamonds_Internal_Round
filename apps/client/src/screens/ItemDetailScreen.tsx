@@ -16,7 +16,7 @@ import {
   Timestamp,
   TxNote,
 } from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { api, getVaultId } from '../api';
 import { Reason, Status } from '../api/types';
 import { findByAccession, fmtDate, fmtDateTime, formatSpan } from '../format';
 import { useLoad, useTx } from '../hooks';
@@ -41,10 +41,10 @@ export const ItemDetailScreen: React.FC = () => {
 
   const { data, loading, error, reload } = useLoad(async () => {
     const [items, vault, info, attestations] = await Promise.all([
-      api.listAssets(DEFAULT_VAULT_ID),
-      api.getVault(DEFAULT_VAULT_ID),
+      api.listAssets(getVaultId()),
+      api.getVault(getVaultId()),
       api.getChainInfo(),
-      api.getAttestations(DEFAULT_VAULT_ID),
+      api.getAttestations(getVaultId()),
     ]);
     const item = findByAccession(items, accession);
     const timeline = item ? await api.timeline(item.vaultId, item.assetId) : null;

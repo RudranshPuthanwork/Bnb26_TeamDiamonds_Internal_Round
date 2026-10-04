@@ -1,132 +1,75 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Button,
-  DotLeaderList,
-  Empty,
-  ErrorNote,
-  Hash,
-  LedgerTable,
-  Loading,
-  Margin,
-  Notice,
-  Page,
-  Rule,
-  ScreenHeader,
-  StatusText,
-  Timestamp,
-} from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
-import type { GuardianReadinessInfo } from '../api/types';
+import React from 'react';
+import { DotLeaderList, Empty, Hash, LedgerTable, Margin, Notice, Screen, StatusText, Timestamp } from '../ui';
+import { api, getVaultId } from '../api';
 import { Status } from '../api/types';
+import { fmtDateTime } from '../format';
+import { useLoad } from '../hooks';
 import { COPY } from '../copy';
 
 export const GuardiansScreen: React.FC = () => {
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [readiness, setReadiness] = useState<GuardianReadinessInfo | null>(null);
-
-  const loadData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.getGuardiansReadiness(DEFAULT_VAULT_ID);
-      setReadiness(data);
-    } catch {
-      setError(COPY.states.error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  if (loading) {
-    return (
-      <Page>
-        <ScreenHeader title={COPY.guardians.pageTitle} />
-        <Loading />
-      </Page>
-    );
-  }
-
-  if (error || !readiness) {
-    return (
-      <Page>
-        <ScreenHeader title={COPY.guardians.pageTitle} />
-        <ErrorNote
-          message={error ?? COPY.states.error}
-          action={<Button onClick={loadData}>{COPY.actions.retry}</Button>}
-        />
-      </Page>
-    );
-  }
-
-  const summaryItems = [
-    { label: COPY.guardians.summaryTotal, value: readiness.n },
-    { label: COPY.guardians.summaryThreshold, value: readiness.t },
-    { label: COPY.guardians.summaryReady, value: `${readiness.readyCount} of ${readiness.n}` },
-    {
-      label: COPY.guardians.summarySlack,
-      value: `${readiness.slack} (ready ${readiness.readyCount} − threshold ${readiness.t})`,
-    },
-  ];
+  const c = COPY.guardians;
+  const { data: readiness, loading, error, reload } = useLoad(() => api.getGuardiansReadiness(getVaultId()), []);
 
   return (
-    <Page>
-      <ScreenHeader
-        title={COPY.guardians.pageTitle}
-      />
+    <Screen title={c.pageTitle} loading={loading} error={error} onRetry={reload}>
+      {readiness && (
+        <>
+          <Margin margin={c.marginLabel}>
+            <p>{c.paragraph}</p>
+          </Margin>
 
-      <Margin margin={COPY.guardians.marginLabel}>
-        <p>{COPY.guardians.paragraph}</p>
-      </Margin>
+          <DotLeaderList
+            items={[
+              { label: c.summaryTotal, value: readiness.n },
+              { label: c.summaryThreshold, value: readiness.t },
+              { label: c.summaryReady, value: `${readiness.readyCount} of ${readiness.n}` },
+              {
+                label: c.summarySlack,
+                value: `${readiness.slack} (ready ${readiness.readyCount} − threshold ${readiness.t})`,
+              },
+            ]}
+          />
 
-      <DotLeaderList items={summaryItems} />
+          {readiness.slack < 1 && (
+            <Notice warning title={c.slackWarning}>
+              {c.slackWarning}
+            </Notice>
+          )}
 
-      {readiness.slack < 1 && (
-        <Notice warning title={COPY.guardians.slackWarning}>
-          {COPY.guardians.slackWarning}
-        </Notice>
+          {readiness.guardians.length === 0 ? (
+            <Empty message={c.empty} />
+          ) : (
+            <LedgerTable>
+              <thead>
+                <tr>
+                  <th>{c.colGuardian}</th>
+                  <th>Key ID</th>
+                  <th>{c.colDrillVer}</th>
+                  <th>{c.colDrillDate}</th>
+                  <th>{c.colStatus}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {readiness.guardians.map((g) => (
+                  <tr key={g.index}>
+                    <td>Guardian {g.index}</td>
+                    <td>
+                      <Hash value={g.keyId} />
+                    </td>
+                    <td>{g.lastDrillVersion ? `v${g.lastDrillVersion}` : '—'}</td>
+                    <td>{g.lastDrillAt ? <Timestamp value={fmtDateTime(g.lastDrillAt)} /> : c.neverDrilled}</td>
+                    <td>
+                      <StatusText status={g.ready ? Status.Sealed : Status.Disputed}>
+                        {g.ready ? c.ready : c.notReady}
+                      </StatusText>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </LedgerTable>
+          )}
+        </>
       )}
-
-      {readiness.guardians.length === 0 ? (
-        <Empty message={COPY.guardians.empty} />
-      ) : (
-        <LedgerTable>
-          <thead>
-            <tr>
-              <th>{COPY.guardians.colGuardian}</th>
-              <th>Key ID</th>
-              <th>{COPY.guardians.colDrillVer}</th>
-              <th>{COPY.guardians.colDrillDate}</th>
-              <th>{COPY.guardians.colStatus}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {readiness.guardians.map((g) => (
-              <tr key={g.index}>
-                <td>Guardian {g.index}</td>
-                <td>
-                  <Hash value={g.keyId} />
-                </td>
-                <td>v{g.lastDrillVersion}</td>
-                <td>
-                  <Timestamp value="18 Oct 2026, 14:00 UTC" />
-                </td>
-                <td>
-                  <StatusText status={g.ready ? Status.Sealed : Status.Disputed}>
-                    {g.ready ? COPY.guardians.ready : COPY.guardians.notReady}
-                  </StatusText>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </LedgerTable>
-      )}
-
-      <Rule />
-    </Page>
+    </Screen>
   );
 };

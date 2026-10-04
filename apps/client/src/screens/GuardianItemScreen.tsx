@@ -14,7 +14,7 @@ import {
   StatusText,
   TxNote,
 } from '../ui';
-import { api, DEFAULT_VAULT_ID } from '../api';
+import { api, getVaultId } from '../api';
 import { Reason, REASON_NAMES, Status } from '../api/types';
 import type { Hex32 } from '../api/types';
 import { findByAccession, formatSpan } from '../format';
@@ -27,7 +27,7 @@ export const GuardianItemScreen: React.FC = () => {
   const { accession } = useParams<{ accession: string }>();
   const c = COPY.guardianItem;
   const { data, loading, error, reload } = useLoad(async () => {
-    const items = await api.listAssets(DEFAULT_VAULT_ID);
+    const items = await api.listAssets(getVaultId());
     const item = findByAccession(items, accession);
     return item ? api.getGuardianNotice(item.vaultId, item.assetId) : null;
   }, [accession]);
