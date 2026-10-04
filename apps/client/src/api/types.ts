@@ -50,6 +50,8 @@ export const Reason = {
 
 export type Reason = (typeof Reason)[keyof typeof Reason];
 
+export const REASON_NAMES: Record<Reason, string> = { 0: 'NONE', 1: 'INCAPACITATED', 2: 'DECEASED', 3: 'MISSING' };
+
 export const KeyKind = {
   EOA: 0,
   P256: 1,
@@ -156,9 +158,14 @@ export interface WireCard {
 export interface AuditEvent {
   id: string;
   txHash: Hex32;
+  /** Contract event name, e.g. Attested. Used for filtering. */
   eventName: string;
+  /** Block timestamp, seconds. */
   timestamp: number;
-  details: string;
+  /** Key hash of the signer when known; null when unknown. */
+  actor: Hex32 | null;
+  /** Event arguments rendered as strings or numbers, described in plain words by copy.ts. */
+  data: Record<string, string | number>;
 }
 
 export interface QueuedChange {
@@ -186,7 +193,64 @@ export interface GuardianReadinessInfo {
   slack: number;
 }
 
+export type RoleName = 'owner' | 'guardian' | 'beneficiary';
+
+export interface Attestation {
+  index: number;
+  reason: Reason;
+  at: number;
+  evidenceHash: Hex32;
+}
+
+/** What a guardian may see about an item: counts only, never other guardians. */
+export interface GuardianNotice {
+  vaultId: Hex32;
+  assetId: Hex32;
+  accessionNumber: string;
+  title: string;
+  status: Status;
+  filed: number;
+  kAttest: number;
+  n: number;
+  /** This guardian's own attestation, NONE if not filed. */
+  myReason: Reason;
+  iDisputed: boolean;
+  releasable: boolean;
+  sharesFiled: number;
+  t: number;
+  iSubmitted: boolean;
+  /** Seconds until the window ends; 0 when not cooling. */
+  opensIn: number;
+  /** True when a dispute freezes the release. */
+  frozen: boolean;
+}
+
+export type ClaimStep = 'waiting' | 'collecting' | 'decrypting' | 'ready' | 'claimed';
+
+export interface ClaimProgress {
+  vaultId: Hex32;
+  assetId: Hex32;
+  accessionNumber: string;
+  title: string;
+  step: ClaimStep;
+  received: number;
+  t: number;
+  rejected: { guardianIndex: number; reason: string }[];
+}
+
+export interface ChainInfo {
+  chainId: number;
+  /** Seconds per TIME_UNIT. */
+  timeUnit: number;
+  blockNumber: bigint;
+  /** Latest block timestamp, seconds. */
+  now: number;
+}
+
+/** All durations crossing this interface are in seconds; adapters convert to TIME_UNIT. */
 export interface ChainApi {
+  setRole(role: RoleName): void;
+  getChainInfo(): Promise<ChainInfo>;
   getVault(vaultId: Hex32): Promise<Vault>;
   getAsset(
     vaultId: Hex32,
@@ -198,12 +262,18 @@ export interface ChainApi {
   currentClaimant(vaultId: Hex32, assetId: Hex32): Promise<Hex32>;
   listAssets(vaultId: Hex32): Promise<AssetItem[]>;
   getCurrentBlock(): Promise<bigint>;
-  // Write methods per specification
+  /** Owner view: one row per guardian index. */
+  getAttestations(vaultId: Hex32): Promise<Attestation[]>;
+  listAuditEvents(vaultId: Hex32): Promise<AuditEvent[]>;
+
+  // Owner writes
   heartbeat(vaultId: Hex32): Promise<Hex32>;
   cancel(vaultId: Hex32): Promise<Hex32>;
+  /** `secret` is sealed client-side; the mock ignores it. */
   addAsset(
     vaultId: Hex32,
-    item: Omit<AssetItem, 'vaultId' | 'status' | 'released' | 'claimed'>
+    item: Omit<AssetItem, 'vaultId' | 'status' | 'released' | 'claimed'>,
+    secret?: Uint8Array
   ): Promise<Hex32>;
   createVault(
     owners: readonly [Hex32, Hex32],
@@ -215,8 +285,22 @@ export interface ChainApi {
   revokeChange(vaultId: Hex32, changeId: Hex32): Promise<Hex32>;
   listQueuedChanges(vaultId: Hex32): Promise<QueuedChange[]>;
   getGuardiansReadiness(vaultId: Hex32): Promise<GuardianReadinessInfo>;
-  listAuditEvents(): Promise<AuditEvent[]>;
+
+  // Guardian
+  listGuardianNotices(vaultId: Hex32): Promise<GuardianNotice[]>;
+  getGuardianNotice(vaultId: Hex32, assetId: Hex32): Promise<GuardianNotice | null>;
+  attest(vaultId: Hex32, reason: Reason, evidenceHash?: Hex32): Promise<Hex32>;
+  dispute(vaultId: Hex32): Promise<Hex32>;
+  submitShare(vaultId: Hex32, assetId: Hex32): Promise<Hex32>;
+  /** Local readiness check; on-chain drill() is a stub until Phase 7. */
+  drill(vaultId: Hex32, assetId: Hex32): Promise<boolean>;
+
+  // Beneficiary
+  listClaims(vaultId: Hex32): Promise<AssetItem[]>;
+  getClaimProgress(vaultId: Hex32, assetId: Hex32): Promise<ClaimProgress | null>;
+  reconstruct(vaultId: Hex32, assetId: Hex32): Promise<{ filename: string; bytes: Uint8Array }>;
+  markClaimed(vaultId: Hex32, assetId: Hex32): Promise<Hex32>;
+
   toggleFailNextWrite(): boolean;
   isFailNextWrite(): boolean;
 }
-

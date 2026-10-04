@@ -13,7 +13,7 @@ import {
   Page,
   ScreenHeader,
 } from '../ui';
-import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
+import { api, DEFAULT_VAULT_ID } from '../api';
 import type { Hex32, Vault } from '../api/types';
 import { COPY } from '../copy';
 
@@ -106,7 +106,7 @@ export const AddItemScreen: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    mockApi.getVault(MOCK_VAULT_ID).then((v) => {
+    api.getVault(DEFAULT_VAULT_ID).then((v) => {
       setVault(v);
       setLoading(false);
     });
@@ -159,7 +159,7 @@ export const AddItemScreen: React.FC = () => {
           b.toString(16).padStart(2, '0')
         ).join('')) as Hex32;
 
-      await mockApi.addAsset(vault.vaultId, {
+      await api.addAsset(vault.vaultId, {
         assetId,
         accessionNumber: accession,
         title,

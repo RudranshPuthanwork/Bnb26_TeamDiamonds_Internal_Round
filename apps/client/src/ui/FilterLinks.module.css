@@ -1,0 +1,29 @@
+.group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin: var(--space-4) 0;
+}
+
+.label {
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+}
+
+.link,
+.active {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 var(--space-1);
+  cursor: pointer;
+}
+
+.link:hover {
+  border-bottom-color: var(--color-rule);
+}
+
+.active {
+  border-bottom-color: var(--color-ink);
+}

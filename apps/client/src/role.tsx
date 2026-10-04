@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { api } from './api';
 
 export type RoleName = 'owner' | 'guardian' | 'beneficiary';
 const KEY = 'heirloom.role';
@@ -21,8 +22,13 @@ function load(): RoleName {
 }
 
 export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [role, setRoleState] = useState<RoleName>(load);
+  const [role, setRoleState] = useState<RoleName>(() => {
+    const r = load();
+    api.setRole(r);
+    return r;
+  });
   const setRole = (r: RoleName) => {
+    api.setRole(r);
     setRoleState(r);
     try {
       localStorage.setItem(KEY, r);

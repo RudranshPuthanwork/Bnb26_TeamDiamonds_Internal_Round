@@ -1,0 +1,87 @@
+.ledger {
+  width: 100%;
+  margin: var(--space-4) 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 12rem 1fr 9rem 9rem;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  align-items: baseline;
+  position: relative;
+}
+
+.head {
+  border-bottom: 1px solid var(--color-ink);
+  font-size: var(--text-xs);
+  color: var(--color-ink-secondary);
+  padding-bottom: var(--space-2);
+}
+
+.row,
+.open {
+  display: grid;
+  grid-template-rows: 1fr;
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.open {
+  animation: openRow var(--motion-audit-row) ease-out;
+}
+
+@keyframes openRow {
+  from {
+    grid-template-rows: 0fr;
+  }
+  to {
+    grid-template-rows: 1fr;
+  }
+}
+
+.event {
+  min-width: 0;
+}
+
+/* Voided: struck through. `striking` draws the line over 200 ms; `struck` is already drawn. */
+.struck,
+.striking {
+  color: var(--color-ink-secondary);
+}
+
+.struck::after,
+.striking::after {
+  content: '';
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  top: 50%;
+  border-top: 1px solid var(--color-ink);
+  transform-origin: left;
+}
+
+.striking::after {
+  animation: strike var(--motion-strike) ease-out;
+}
+
+@keyframes strike {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .line {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+}

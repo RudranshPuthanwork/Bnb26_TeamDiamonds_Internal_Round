@@ -12,7 +12,7 @@ import {
   Rule,
   ScreenHeader,
 } from '../ui';
-import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
+import { api, DEFAULT_VAULT_ID } from '../api';
 import type { AssetItem } from '../api/types';
 import { COPY } from '../copy';
 
@@ -26,8 +26,8 @@ export const RotateScreen: React.FC = () => {
 
   useEffect(() => {
     const decoded = decodeURIComponent(rawAccession ?? '');
-    mockApi
-      .listAssets(MOCK_VAULT_ID)
+    api
+      .listAssets(DEFAULT_VAULT_ID)
       .then((assets) => {
         const found = assets.find((a) => {
           const normDecoded = decoded.toLowerCase().trim();

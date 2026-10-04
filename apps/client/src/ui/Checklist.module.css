@@ -36,3 +36,16 @@
   font-size: var(--text-xs);
   color: var(--color-ink-secondary);
 }
+
+.current {
+  border-left: 2px solid var(--color-ink);
+  padding-left: var(--space-3);
+}
+
+.todo {
+  color: var(--color-ink-secondary);
+}
+
+.done .title {
+  font-weight: 400;
+}

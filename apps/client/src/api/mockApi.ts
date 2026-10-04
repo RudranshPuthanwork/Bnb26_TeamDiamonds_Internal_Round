@@ -1,16 +1,21 @@
 import type {
   AssetItem,
   AssetPolicy,
+  Attestation,
   AuditEvent,
   ChainApi,
+  ChainInfo,
+  ClaimProgress,
+  GuardianNotice,
   GuardianReadinessInfo,
   GuardianStatus,
   Hex32,
   QueuedChange,
+  RoleName,
   Timeline,
   Vault,
 } from './types';
-import { Status } from './types';
+import { REASON_NAMES, Reason, Status } from './types';
 
 
 export const MOCK_VAULT_ID: Hex32 =
@@ -34,7 +39,7 @@ export const MOCK_VAULT: Vault = {
   t: 3,
   policyDelay: 604800, // 7 days in seconds
   epoch: 4,
-  lastHeartbeat: 1729382400, // 19 Oct
+  lastHeartbeat: Math.floor(Date.now() / 1000) - 12 * 86400,
   absentUntil: 0,
   disputedAt: 0,
   disputeEpoch: 0,
@@ -163,70 +168,137 @@ export const MOCK_ASSETS: AssetItem[] = [
   },
 ];
 
+const nowSec = () => Math.floor(Date.now() / 1000);
+const DAY = 86400;
+const ME_GUARDIAN = 1; // the mock guardian is index 1
+const FILE_BYTES = new TextEncoder().encode(
+  'Sample plaintext, 312 bytes in the real flow. Reconstructed by the mock adapter.'
+);
+
+type Mark = Record<number, { reason: Reason; at: number }>;
+
 export class MockChainApi implements ChainApi {
   private vault: Vault = { ...MOCK_VAULT };
-  private assets: AssetItem[] = [...MOCK_ASSETS];
+  private assets: AssetItem[] = MOCK_ASSETS.map((a) => ({ ...a }));
+  private marks = new Map<Hex32, Mark>();
+  private disputer = new Map<Hex32, number>();
+  private shares = new Map<Hex32, Set<number>>();
+  private rejected = new Map<Hex32, { guardianIndex: number; reason: string }[]>();
+  private failNext = false;
+  private seq = 0;
   private queuedChanges: QueuedChange[] = [
     {
       changeId: '0x1010101010101010101010101010101010101010101010101010101010101010',
       kind: 'Threshold',
       description: 'Lower guardian threshold t from 3 to 2',
-      applyAfter: Math.floor(Date.now() / 1000) + 345600, // 4 days remaining
-      queuedAt: Math.floor(Date.now() / 1000) - 259200,
+      applyAfter: nowSec() + 4 * DAY,
+      queuedAt: nowSec() - 3 * DAY,
     },
     {
       changeId: '0x2020202020202020202020202020202020202020202020202020202020202020',
       kind: 'Beneficiary',
       description: 'Replace contingent beneficiary for HL-0007/07',
-      applyAfter: Math.floor(Date.now() / 1000) + 518400, // 6 days remaining
-      queuedAt: Math.floor(Date.now() / 1000) - 86400,
+      applyAfter: nowSec() + 6 * DAY,
+      queuedAt: nowSec() - DAY,
     },
   ];
-  private auditEvents: AuditEvent[] = [
-    {
-      id: 'evt-1',
-      txHash: '0x8f2a11b092c4e7d81a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f',
-      eventName: 'VaultCreated',
-      timestamp: 1727827200, // 02 Oct 2026
-      details: 'Vault initialized with 5 guardians, threshold 3',
-    },
-    {
-      id: 'evt-2',
-      txHash: '0x9a3b22c103d5f8e92b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f50',
-      eventName: 'Heartbeat',
-      timestamp: 1729382400, // 19 Oct 2026
-      details: 'Owner signature received for epoch 4',
-    },
-  ];
-  private failNext: boolean = false;
+  private auditEvents: AuditEvent[] = [];
 
-  private generateFakeTx(): Hex32 {
+  constructor() {
+    const t0 = nowSec();
+    const g = this.vault.guardians;
+    const id = (n: number) => this.assets[n].assetId;
+    this.event('VaultCreated', null, { guardians: 5, t: 3 }, t0 - 40 * DAY);
+    this.event('AssetAdded', this.vault.owners[0], { accession: 'HL-0007/01' }, t0 - 39 * DAY);
+    this.event('Heartbeat', this.vault.owners[0], { epoch: 3 }, t0 - 20 * DAY);
+    // seeded marks mirror the seeded statuses
+    this.mark(id(1), 2, Reason.INCAPACITATED, t0 - 2 * DAY);
+    this.mark(id(1), 3, Reason.DECEASED, t0 - 1 * DAY);
+    [1, 2, 3].forEach((i, k) => this.mark(id(3), i, Reason.DECEASED, t0 - (3 - k) * DAY));
+    [1, 2, 4].forEach((i, k) => this.mark(id(4), i, Reason.INCAPACITATED, t0 - (6 - k) * DAY));
+    this.disputer.set(id(4), 4);
+    this.vault.disputer = 4;
+    this.vault.disputedAt = t0 - 5 * DAY;
+    this.vault.disputeEpoch = this.vault.epoch;
+    [1, 2, 3].forEach((i, k) => this.mark(id(5), i, Reason.DECEASED, t0 - (12 - k) * DAY));
+    this.shares.set(id(5), new Set([2, 3]));
+    this.rejected.set(id(5), [{ guardianIndex: 3, reason: 'Share did not match its commitment' }]);
+    this.event('Attested', g[1], { guardian: 2, reason: 'INCAPACITATED' }, t0 - 2 * DAY);
+    this.event('Attested', g[2], { guardian: 3, reason: 'DECEASED' }, t0 - 1 * DAY);
+    this.event('Disputed', g[3], { guardian: 4 }, t0 - 5 * DAY);
+    this.event('ShareSubmitted', g[1], { guardian: 2, accession: 'HL-0007/06' }, t0 - 3600 * 5);
+    this.event('ShareSubmitted', g[2], { guardian: 3, accession: 'HL-0007/06' }, t0 - 3600 * 3);
+    this.event('Claimed', null, { accession: 'HL-0007/08' }, t0 - 9 * DAY);
+  }
+
+  private mark(assetId: Hex32, index: number, reason: Reason, at: number) {
+    const m = this.marks.get(assetId) ?? {};
+    m[index] = { reason, at };
+    this.marks.set(assetId, m);
+  }
+
+  private event(
+    eventName: string,
+    actor: Hex32 | null,
+    data: AuditEvent['data'],
+    timestamp = nowSec(),
+    txHash?: Hex32
+  ) {
+    this.auditEvents.unshift({
+      id: `evt-${++this.seq}`,
+      txHash: txHash ?? this.fakeTx(),
+      eventName,
+      timestamp,
+      actor,
+      data,
+    });
+    this.auditEvents.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  private fakeTx(): Hex32 {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
     return ('0x' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')) as Hex32;
   }
 
-  private async simulateLatency(): Promise<void> {
+  /** Mock writes wait 600 ms, then mutate in-memory state and append an audit event. */
+  private async write(
+    eventName: string,
+    actor: Hex32 | null,
+    data: AuditEvent['data'],
+    mutate: () => void
+  ): Promise<Hex32> {
     await new Promise((resolve) => setTimeout(resolve, 600));
-  }
-
-  private async executeWrite<T>(action: string, mutate: () => T, details: string): Promise<{ txHash: Hex32; result: T }> {
-    await this.simulateLatency();
     if (this.failNext) {
       this.failNext = false;
       throw new Error('The chain did not answer. Nothing was changed. Retry, or submit directly from a wallet.');
     }
+    mutate();
+    const txHash = this.fakeTx();
+    this.event(eventName, actor, data, nowSec(), txHash);
+    return txHash;
+  }
 
-    const result = mutate();
-    const txHash = this.generateFakeTx();
-    this.auditEvents.unshift({
-      id: `evt-${Date.now()}`,
-      txHash,
-      eventName: action,
-      timestamp: Math.floor(Date.now() / 1000),
-      details,
-    });
-    return { txHash, result };
+  private find(assetId: Hex32) {
+    const a = this.assets.find((x) => x.assetId === assetId);
+    if (!a) throw new Error('Item not found in this collection register.');
+    return a;
+  }
+
+  private filed(assetId: Hex32) {
+    return Object.keys(this.marks.get(assetId) ?? {}).length;
+  }
+
+  private bumpStatus(a: AssetItem) {
+    if (a.released || a.claimed) return;
+    if (this.disputer.has(a.assetId)) a.status = Status.Disputed;
+    else if (this.filed(a.assetId) >= a.policy.kAttest) a.status = Status.Cooling;
+    else if (this.filed(a.assetId) > 0) a.status = Status.Armed;
+    else a.status = Status.Sealed;
+  }
+
+  setRole(_role: RoleName) {
+    // The mock acts as guardian 1 and the primary beneficiary regardless of role.
   }
 
   toggleFailNextWrite(): boolean {
@@ -238,134 +310,113 @@ export class MockChainApi implements ChainApi {
     return this.failNext;
   }
 
+  async getChainInfo(): Promise<ChainInfo> {
+    return { chainId: 84532, timeUnit: DAY, blockNumber: MOCK_CURRENT_BLOCK, now: nowSec() };
+  }
+
   async getVault(vaultId: Hex32): Promise<Vault> {
-    if (vaultId !== this.vault.vaultId) {
-      return { ...this.vault, vaultId };
-    }
-    return { ...this.vault };
+    return { ...this.vault, vaultId: vaultId ?? this.vault.vaultId };
   }
 
-  async getAsset(
-    vaultId: Hex32,
-    assetId: Hex32
-  ): Promise<{ policy: AssetPolicy; released: boolean; claimed: boolean }> {
-    const asset =
-      this.assets.find((a) => a.vaultId === vaultId && a.assetId === assetId) ??
-      this.assets[0];
+  async getAsset(_v: Hex32, assetId: Hex32) {
+    const a = this.find(assetId);
+    return { policy: a.policy, released: a.released, claimed: a.claimed };
+  }
+
+  async status(_v: Hex32, assetId: Hex32): Promise<Status> {
+    return this.find(assetId).status;
+  }
+
+  async timeline(_v: Hex32, assetId: Hex32): Promise<Timeline> {
+    const a = this.find(assetId);
+    const t = nowSec();
+    const marks = Object.values(this.marks.get(assetId) ?? {});
+    const tQuorum = marks.length >= a.policy.kAttest ? Math.max(...marks.map((m) => m.at)) : 0;
+    const cooling = a.status === Status.Cooling;
     return {
-      policy: asset.policy,
-      released: asset.released,
-      claimed: asset.claimed,
+      tSilence: BigInt(this.vault.lastHeartbeat + a.policy.minInactivity),
+      tQuorum: BigInt(tQuorum),
+      resumeAt: 0n,
+      tOpen: tQuorum ? BigInt(tQuorum + a.policy.window) : 0n,
+      opensAt: cooling ? BigInt(t + 28 * 3600) : tQuorum ? BigInt(tQuorum + a.policy.window) : 0n,
+      attestationsFiled: this.filed(assetId),
+      kAttest: a.policy.kAttest,
+      disputed: this.disputer.has(assetId),
+      claimDeadline: BigInt(t + a.policy.claimDeadline),
     };
   }
 
-  async status(vaultId: Hex32, assetId: Hex32): Promise<Status> {
-    const asset = this.assets.find(
-      (a) => a.vaultId === vaultId && a.assetId === assetId
-    );
-    return asset ? asset.status : Status.Sealed;
-  }
-
-  async timeline(vaultId: Hex32, assetId: Hex32): Promise<Timeline> {
-    const asset =
-      this.assets.find((a) => a.vaultId === vaultId && a.assetId === assetId) ??
-      this.assets[0];
-
-    const isCooling = asset.status === Status.Cooling;
-    const isDisputed = asset.status === Status.Disputed;
-
-    return {
-      tSilence: 1729382400n + BigInt(asset.policy.minInactivity),
-      tQuorum: 1729500000n,
-      resumeAt: isDisputed ? 1730000000n : 0n,
-      tOpen: 1729600000n,
-      opensAt: isCooling ? 1729600000n + 100800n : 1729600000n,
-      attestationsFiled: asset.status === Status.Armed ? 2 : asset.policy.kAttest,
-      kAttest: asset.policy.kAttest,
-      disputed: isDisputed,
-      claimDeadline: 1731500000n,
-    };
-  }
-
-  async isReleasable(vaultId: Hex32, assetId: Hex32): Promise<boolean> {
-    const s = await this.status(vaultId, assetId);
+  async isReleasable(_v: Hex32, assetId: Hex32): Promise<boolean> {
+    const s = this.find(assetId).status;
     return s === Status.Releasable || s === Status.ContingentEligible;
   }
 
-  async currentClaimant(vaultId: Hex32, assetId: Hex32): Promise<Hex32> {
-    const asset =
-      this.assets.find((a) => a.vaultId === vaultId && a.assetId === assetId) ??
-      this.assets[0];
-
-    if (asset.status === Status.ContingentEligible) {
-      return asset.policy.contingentBenef;
-    }
-    return asset.policy.primaryBenef;
+  async currentClaimant(_v: Hex32, assetId: Hex32): Promise<Hex32> {
+    const a = this.find(assetId);
+    return a.status === Status.ContingentEligible ? a.policy.contingentBenef : a.policy.primaryBenef;
   }
 
   async listAssets(vaultId: Hex32): Promise<AssetItem[]> {
-    return [...this.assets.filter((a) => a.vaultId === vaultId)];
+    return this.assets.filter((a) => a.vaultId === vaultId || vaultId === this.vault.vaultId).map((a) => ({ ...a }));
   }
 
   async getCurrentBlock(): Promise<bigint> {
     return MOCK_CURRENT_BLOCK;
   }
 
-  // --- Write methods ---
-
-  async heartbeat(_vaultId: Hex32): Promise<Hex32> {
-    const { txHash } = await this.executeWrite(
-      'Heartbeat',
-      () => {
-        this.vault.epoch += 1;
-        this.vault.lastHeartbeat = Math.floor(Date.now() / 1000);
-      },
-      `Heartbeat recorded. Epoch advanced to ${this.vault.epoch + 1}`
-    );
-    return txHash;
+  async getAttestations(_v?: Hex32, _a?: Hex32): Promise<Attestation[]> {
+    const out: Attestation[] = [];
+    // Owner view: one row per guardian index, aggregated over the first asset with marks.
+    const merged: Mark = {};
+    for (const m of this.marks.values()) Object.assign(merged, m);
+    for (let i = 1; i <= this.vault.guardians.length; i++) {
+      const m = merged[i];
+      out.push({
+        index: i,
+        reason: m?.reason ?? Reason.NONE,
+        at: m?.at ?? 0,
+        evidenceHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      });
+    }
+    return out;
   }
 
-  async cancel(_vaultId: Hex32): Promise<Hex32> {
-    const { txHash } = await this.executeWrite(
-      'Cancelled',
-      () => {
-        this.vault.epoch += 1;
-        this.vault.lastHeartbeat = Math.floor(Date.now() / 1000);
-        // Reset everything not released to Sealed
-        this.assets = this.assets.map((a) => {
-          if (!a.released && a.status !== Status.Claimed) {
-            return { ...a, status: Status.Sealed };
-          }
-          return a;
-        });
-      },
-      `Owner cancel executed. Unreleased assets reset to Sealed. Epoch is now ${this.vault.epoch + 1}`
-    );
-    return txHash;
+  async listAuditEvents(_v?: Hex32, _a?: Hex32): Promise<AuditEvent[]> {
+    return [...this.auditEvents];
+  }
+
+  // --- Owner writes ---
+
+  async heartbeat(_v?: Hex32, _a?: Hex32): Promise<Hex32> {
+    return this.write('Heartbeat', this.vault.owners[0], { epoch: this.vault.epoch + 1 }, () => {
+      this.vault.epoch += 1;
+      this.vault.lastHeartbeat = nowSec();
+    });
+  }
+
+  async cancel(_v?: Hex32, _a?: Hex32): Promise<Hex32> {
+    return this.write('Cancelled', this.vault.owners[0], { epoch: this.vault.epoch + 1 }, () => {
+      this.vault.epoch += 1;
+      this.vault.lastHeartbeat = nowSec();
+      this.vault.disputedAt = 0;
+      for (const a of this.assets) {
+        if (a.released || a.claimed) continue;
+        this.marks.delete(a.assetId);
+        this.disputer.delete(a.assetId);
+        a.status = Status.Sealed;
+      }
+    });
   }
 
   async addAsset(
     vaultId: Hex32,
     item: Omit<AssetItem, 'vaultId' | 'status' | 'released' | 'claimed'>
   ): Promise<Hex32> {
-    const { txHash } = await this.executeWrite(
-      'AssetAdded',
-      () => {
-        this.vault.epoch += 1;
-        this.vault.lastHeartbeat = Math.floor(Date.now() / 1000);
-        const newItem: AssetItem = {
-          ...item,
-          vaultId,
-          status: Status.Sealed,
-          released: false,
-          claimed: false,
-        };
-        this.assets.push(newItem);
-        return newItem;
-      },
-      `Asset ${item.accessionNumber} added to collection.`
-    );
-    return txHash;
+    return this.write('AssetAdded', this.vault.owners[0], { accession: item.accessionNumber }, () => {
+      this.vault.epoch += 1;
+      this.vault.lastHeartbeat = nowSec();
+      this.assets.push({ ...item, vaultId, status: Status.Sealed, released: false, claimed: false });
+    });
   }
 
   async createVault(
@@ -374,84 +425,172 @@ export class MockChainApi implements ChainApi {
     t: number,
     policyDelay: number
   ): Promise<Hex32> {
-    const newVaultId = this.generateFakeTx();
-    const { txHash } = await this.executeWrite(
-      'VaultCreated',
-      () => {
-        this.vault = {
-          vaultId: newVaultId,
-          owners,
-          guardians: [...guardians],
-          t,
-          policyDelay,
-          epoch: 1,
-          lastHeartbeat: Math.floor(Date.now() / 1000),
-          absentUntil: 0,
-          disputedAt: 0,
-          disputeEpoch: 0,
-          disputer: 0,
-        };
-        this.assets = [];
-        return newVaultId;
-      },
-      `New vault created with ${guardians.length} custodians, threshold ${t}`
-    );
-    return txHash;
+    const newVaultId = this.fakeTx();
+    await this.write('VaultCreated', owners[0], { guardians: guardians.length, t }, () => {
+      this.vault = {
+        vaultId: newVaultId,
+        owners,
+        guardians: [...guardians],
+        t,
+        policyDelay,
+        epoch: 1,
+        lastHeartbeat: nowSec(),
+        absentUntil: 0,
+        disputedAt: 0,
+        disputeEpoch: 0,
+        disputer: 0,
+      };
+      this.assets = [];
+    });
+    return newVaultId;
   }
 
-  async setAbsence(_vaultId: Hex32, until: number): Promise<Hex32> {
-    const { txHash } = await this.executeWrite(
-      'AbsenceSet',
-      () => {
-        this.vault.absentUntil = until;
-      },
-      `Planned absence set until timestamp ${until}`
-    );
-    return txHash;
+  async setAbsence(_v: Hex32, until: number): Promise<Hex32> {
+    return this.write('AbsenceSet', this.vault.owners[0], { until }, () => {
+      this.vault.absentUntil = until;
+    });
   }
 
-  async revokeChange(_vaultId: Hex32, changeId: Hex32): Promise<Hex32> {
-    const { txHash } = await this.executeWrite(
-      'ChangeRevoked',
-      () => {
-        this.queuedChanges = this.queuedChanges.filter((c) => c.changeId !== changeId);
-      },
-      `Queued policy change ${changeId.slice(0, 10)}… revoked.`
-    );
-    return txHash;
+  async revokeChange(_v: Hex32, changeId: Hex32): Promise<Hex32> {
+    return this.write('ChangeRevoked', this.vault.owners[0], { changeId }, () => {
+      this.queuedChanges = this.queuedChanges.filter((c) => c.changeId !== changeId);
+    });
   }
 
-  async listQueuedChanges(_vaultId: Hex32): Promise<QueuedChange[]> {
+  async listQueuedChanges(_v?: Hex32, _a?: Hex32): Promise<QueuedChange[]> {
     return [...this.queuedChanges];
   }
 
-  async getGuardiansReadiness(_vaultId: Hex32): Promise<GuardianReadinessInfo> {
-    const guardianStatuses: GuardianStatus[] = this.vault.guardians.map((keyId, idx) => ({
+  async getGuardiansReadiness(_v?: Hex32, _a?: Hex32): Promise<GuardianReadinessInfo> {
+    const guardians: GuardianStatus[] = this.vault.guardians.map((keyId, idx) => ({
       index: idx + 1,
-
       keyId,
       lastDrillVersion: 1,
-      lastDrillAt: 1729267200 - idx * 86400, // Irregular dates around mid Oct
-      ready: idx !== 4, // 4 out of 5 ready
+      lastDrillAt: nowSec() - (idx + 3) * DAY,
+      ready: idx !== 4,
     }));
-
-    const readyCount = guardianStatuses.filter((g) => g.ready).length;
-    const slack = readyCount - this.vault.t;
-
+    const readyCount = guardians.filter((g) => g.ready).length;
     return {
       vaultId: this.vault.vaultId,
       t: this.vault.t,
-      n: this.vault.guardians.length,
-      guardians: guardianStatuses,
+      n: guardians.length,
+      guardians,
       readyCount,
-      slack,
+      slack: readyCount - this.vault.t,
     };
   }
 
-  async listAuditEvents(): Promise<AuditEvent[]> {
-    return [...this.auditEvents];
+  // --- Guardian ---
+
+  private notice(a: AssetItem): GuardianNotice {
+    const mine = this.marks.get(a.assetId)?.[ME_GUARDIAN];
+    const sent = this.shares.get(a.assetId) ?? new Set<number>();
+    return {
+      vaultId: a.vaultId,
+      assetId: a.assetId,
+      accessionNumber: a.accessionNumber,
+      title: a.title,
+      status: a.status,
+      filed: this.filed(a.assetId),
+      kAttest: a.policy.kAttest,
+      n: this.vault.guardians.length,
+      myReason: mine?.reason ?? Reason.NONE,
+      iDisputed: this.disputer.get(a.assetId) === ME_GUARDIAN,
+      releasable: a.status === Status.Releasable,
+      sharesFiled: sent.size,
+      t: this.vault.t,
+      iSubmitted: sent.has(ME_GUARDIAN),
+      opensIn: a.status === Status.Cooling ? 28 * 3600 : 0,
+      frozen: a.status === Status.Disputed,
+    };
+  }
+
+  async listGuardianNotices(_v?: Hex32, _a?: Hex32): Promise<GuardianNotice[]> {
+    return this.assets.map((a) => this.notice(a));
+  }
+
+  async getGuardianNotice(_v: Hex32, assetId: Hex32): Promise<GuardianNotice | null> {
+    const a = this.assets.find((x) => x.assetId === assetId);
+    return a ? this.notice(a) : null;
+  }
+
+  async attest(_v: Hex32, reason: Reason, _evidenceHash?: Hex32): Promise<Hex32> {
+    return this.write('Attested', this.vault.guardians[ME_GUARDIAN - 1], { guardian: ME_GUARDIAN, reason: REASON_NAMES[reason] }, () => {
+      for (const a of this.assets) {
+        if (a.released || a.claimed) continue;
+        this.mark(a.assetId, ME_GUARDIAN, reason, nowSec());
+        this.bumpStatus(a);
+      }
+    });
+  }
+
+  async dispute(): Promise<Hex32> {
+    return this.write('Disputed', this.vault.guardians[ME_GUARDIAN - 1], { guardian: ME_GUARDIAN }, () => {
+      for (const a of this.assets) {
+        if (a.released || a.claimed) continue;
+        this.disputer.set(a.assetId, ME_GUARDIAN);
+        this.bumpStatus(a);
+      }
+    });
+  }
+
+  async submitShare(_v: Hex32, assetId: Hex32): Promise<Hex32> {
+    const a = this.find(assetId);
+    return this.write('ShareSubmitted', this.vault.guardians[ME_GUARDIAN - 1], { guardian: ME_GUARDIAN, accession: a.accessionNumber }, () => {
+      const set = this.shares.get(assetId) ?? new Set<number>();
+      set.add(ME_GUARDIAN);
+      this.shares.set(assetId, set);
+    });
+  }
+
+  async drill(_v: Hex32, assetId: Hex32): Promise<boolean> {
+    const a = this.find(assetId);
+    await this.write('DrillPassed', this.vault.guardians[ME_GUARDIAN - 1], { guardian: ME_GUARDIAN, accession: a.accessionNumber }, () => {});
+    return true;
+  }
+
+  // --- Beneficiary ---
+
+  async listClaims(_v?: Hex32, _a?: Hex32): Promise<AssetItem[]> {
+    return this.assets.map((a) => ({ ...a }));
+  }
+
+  async getClaimProgress(_v: Hex32, assetId: Hex32): Promise<ClaimProgress | null> {
+    const a = this.assets.find((x) => x.assetId === assetId);
+    if (!a) return null;
+    const received = (this.shares.get(assetId)?.size ?? 0) - (this.rejected.get(assetId)?.length ?? 0);
+    const t = this.vault.t;
+    const step = a.claimed
+      ? 'claimed'
+      : !a.released && a.status !== Status.Releasable
+        ? 'waiting'
+        : received >= t
+          ? 'ready'
+          : 'collecting';
+    return {
+      vaultId: a.vaultId,
+      assetId,
+      accessionNumber: a.accessionNumber,
+      title: a.title,
+      step,
+      received: Math.max(0, received),
+      t,
+      rejected: this.rejected.get(assetId) ?? [],
+    };
+  }
+
+  async reconstruct(_v?: Hex32, _a?: Hex32): Promise<{ filename: string; bytes: Uint8Array }> {
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    return { filename: 'heirloom-item.txt', bytes: FILE_BYTES };
+  }
+
+  async markClaimed(_v: Hex32, assetId: Hex32): Promise<Hex32> {
+    const a = this.find(assetId);
+    return this.write('Claimed', a.policy.primaryBenef, { accession: a.accessionNumber }, () => {
+      a.claimed = true;
+      a.status = Status.Claimed;
+    });
   }
 }
 
 export const mockApi = new MockChainApi();
-

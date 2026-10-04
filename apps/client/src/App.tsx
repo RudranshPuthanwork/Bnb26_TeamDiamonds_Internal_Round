@@ -8,6 +8,12 @@ import {
   GuardiansScreen,
   ChangesScreen,
   RotateScreen,
+  GuardianNoticesScreen,
+  GuardianItemScreen,
+  GuardianGuideScreen,
+  BeneficiaryClaimsScreen,
+  BeneficiaryClaimScreen,
+  AuditScreen,
 } from './screens';
 import { Page, Loading } from './ui';
 import { Layout } from './Layout';
@@ -44,6 +50,12 @@ export function App() {
           <Route path="/item/:accession" element={<ItemDetailScreen />} />
           <Route path="/guardians" element={<GuardiansScreen />} />
           <Route path="/changes" element={<ChangesScreen />} />
+          <Route path="/g" element={<GuardianNoticesScreen />} />
+          <Route path="/g/guide" element={<GuardianGuideScreen />} />
+          <Route path="/g/:accession" element={<GuardianItemScreen />} />
+          <Route path="/b" element={<BeneficiaryClaimsScreen />} />
+          <Route path="/b/:accession" element={<BeneficiaryClaimScreen />} />
+          <Route path="/audit/:collection" element={<AuditScreen />} />
 
           {showDevRoutes && (
             <>

@@ -13,7 +13,7 @@ import {
   ScreenHeader,
   TextareaField,
 } from '../ui';
-import { mockApi } from '../api/mockApi';
+import { api } from '../api';
 import type { Hex32, WireCard } from '../api/types';
 import { COPY } from '../copy';
 
@@ -202,7 +202,7 @@ export const CreateCollectionScreen: React.FC = () => {
         '0x9c417f300184c7eb3901a5e42718cb498e103f19472304918734018fba817412',
       ];
       const guardianKeyIds = validGuardians.map((g) => g.keyId as Hex32);
-      await mockApi.createVault(owners, guardianKeyIds, tInput, policyDelay);
+      await api.createVault(owners, guardianKeyIds, tInput, policyDelay);
       navigate('/');
     } catch {
       setSubmitError(COPY.states.error);

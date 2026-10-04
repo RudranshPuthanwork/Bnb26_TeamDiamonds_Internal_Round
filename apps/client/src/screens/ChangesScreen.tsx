@@ -11,7 +11,7 @@ import {
   ScreenHeader,
   Timestamp,
 } from '../ui';
-import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
+import { api, DEFAULT_VAULT_ID } from '../api';
 import type { QueuedChange } from '../api/types';
 import { COPY } from '../copy';
 
@@ -25,7 +25,7 @@ export const ChangesScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await mockApi.listQueuedChanges(MOCK_VAULT_ID);
+      const data = await api.listQueuedChanges(DEFAULT_VAULT_ID);
       setChanges(data);
     } catch {
       setError(COPY.states.error);
@@ -42,8 +42,8 @@ export const ChangesScreen: React.FC = () => {
     setActionLoading(true);
     setError(null);
     try {
-      await mockApi.revokeChange(MOCK_VAULT_ID, changeId);
-      const updated = await mockApi.listQueuedChanges(MOCK_VAULT_ID);
+      await api.revokeChange(DEFAULT_VAULT_ID, changeId);
+      const updated = await api.listQueuedChanges(DEFAULT_VAULT_ID);
       setChanges(updated);
     } catch {
       setError(COPY.states.error);

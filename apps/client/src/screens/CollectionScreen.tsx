@@ -16,7 +16,7 @@ import {
   StatusText,
   Timestamp,
 } from '../ui';
-import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
+import { api, DEFAULT_VAULT_ID } from '../api';
 import type { AssetItem, Vault } from '../api/types';
 import { COPY } from '../copy';
 
@@ -32,8 +32,8 @@ export const CollectionScreen: React.FC = () => {
     setError(null);
     try {
       const [v, a] = await Promise.all([
-        mockApi.getVault(MOCK_VAULT_ID),
-        mockApi.listAssets(MOCK_VAULT_ID),
+        api.getVault(DEFAULT_VAULT_ID),
+        api.listAssets(DEFAULT_VAULT_ID),
       ]);
       setVault(v);
       setAssets(a);

@@ -15,7 +15,7 @@ import {
   StatusText,
   Timestamp,
 } from '../ui';
-import { mockApi, MOCK_VAULT_ID } from '../api/mockApi';
+import { api, DEFAULT_VAULT_ID } from '../api';
 import type { GuardianReadinessInfo } from '../api/types';
 import { Status } from '../api/types';
 import { COPY } from '../copy';
@@ -29,7 +29,7 @@ export const GuardiansScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await mockApi.getGuardiansReadiness(MOCK_VAULT_ID);
+      const data = await api.getGuardiansReadiness(DEFAULT_VAULT_ID);
       setReadiness(data);
     } catch {
       setError(COPY.states.error);
