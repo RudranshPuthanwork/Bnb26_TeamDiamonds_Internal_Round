@@ -179,17 +179,17 @@ export const heirloomRegistryAbi = [
     "name": "applyChange",
     "inputs": [
       {
-        "name": "",
+        "name": "vaultId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "changeId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "auth",
         "type": "tuple",
         "internalType": "struct HeirloomRegistry.Auth",
         "components": [
@@ -222,7 +222,7 @@ export const heirloomRegistryAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -329,17 +329,17 @@ export const heirloomRegistryAbi = [
     "name": "claimContingent",
     "inputs": [
       {
-        "name": "",
+        "name": "vaultId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "assetId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "auth",
         "type": "tuple",
         "internalType": "struct HeirloomRegistry.Auth",
         "components": [
@@ -372,7 +372,7 @@ export const heirloomRegistryAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -514,17 +514,17 @@ export const heirloomRegistryAbi = [
     "name": "drill",
     "inputs": [
       {
-        "name": "",
+        "name": "vaultId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "version",
         "type": "uint16",
         "internalType": "uint16"
       },
       {
-        "name": "",
+        "name": "auth",
         "type": "tuple",
         "internalType": "struct HeirloomRegistry.Auth",
         "components": [
@@ -557,7 +557,7 @@ export const heirloomRegistryAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -598,6 +598,297 @@ export const heirloomRegistryAbi = [
         "name": "extensions",
         "type": "uint256[]",
         "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAsset",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "policy",
+        "type": "tuple",
+        "internalType": "struct HeirloomRegistry.AssetPolicy",
+        "components": [
+          {
+            "name": "reasonsMask",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "kAttest",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "requireEvidence",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "minInactivity",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "window",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "claimDeadline",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "primaryBenef",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "contingentBenef",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "bundleCid",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "version",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "shareCommitments",
+            "type": "bytes32[]",
+            "internalType": "bytes32[]"
+          }
+        ]
+      },
+      {
+        "name": "released",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "claimed",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAttestation",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "guardianIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "reason",
+        "type": "uint8",
+        "internalType": "enum Reason"
+      },
+      {
+        "name": "at",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "evidenceHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPendingChange",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "changeId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "kind",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "applyAfter",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "exists",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getShare",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "assetId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "claimantKeyId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "guardianIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getVault",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "owners",
+        "type": "bytes32[2]",
+        "internalType": "bytes32[2]"
+      },
+      {
+        "name": "guardians",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "t",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "policyDelay",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "epoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "lastHeartbeat",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "absentUntil",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "disputedAt",
+        "type": "uint40",
+        "internalType": "uint40"
+      },
+      {
+        "name": "disputeEpoch",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "disputer",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "guardianIndex",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "keyId_",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "found",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "index",
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ],
     "stateMutability": "view"
@@ -702,6 +993,35 @@ export const heirloomRegistryAbi = [
   },
   {
     "type": "function",
+    "name": "lastDrill",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "guardianIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "version",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "at",
+        "type": "uint40",
+        "internalType": "uint40"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "markClaimed",
     "inputs": [
       {
@@ -774,22 +1094,27 @@ export const heirloomRegistryAbi = [
     "name": "queueChange",
     "inputs": [
       {
-        "name": "",
+        "name": "vaultId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "changeId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "kind",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "data",
         "type": "bytes",
         "internalType": "bytes"
       },
       {
-        "name": "",
+        "name": "auth",
         "type": "tuple",
         "internalType": "struct HeirloomRegistry.Auth",
         "components": [
@@ -822,39 +1147,63 @@ export const heirloomRegistryAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "readyGuardians",
+    "inputs": [
+      {
+        "name": "vaultId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "version",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ready",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "rekey",
     "inputs": [
       {
-        "name": "",
+        "name": "vaultId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "assetId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "version",
         "type": "uint16",
         "internalType": "uint16"
       },
       {
-        "name": "",
+        "name": "newBundleCid",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "newCommitments",
         "type": "bytes32[]",
         "internalType": "bytes32[]"
       },
       {
-        "name": "",
+        "name": "auth",
         "type": "tuple",
         "internalType": "struct HeirloomRegistry.Auth",
         "components": [
@@ -887,24 +1236,24 @@ export const heirloomRegistryAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "revokeChange",
     "inputs": [
       {
-        "name": "",
+        "name": "vaultId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "changeId",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "",
+        "name": "auth",
         "type": "tuple",
         "internalType": "struct HeirloomRegistry.Auth",
         "components": [
@@ -937,7 +1286,7 @@ export const heirloomRegistryAbi = [
       }
     ],
     "outputs": [],
-    "stateMutability": "pure"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",

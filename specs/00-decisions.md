@@ -34,3 +34,6 @@ D15 Amendments from review 2b
 - beneficiaryReconstruct and drillCheck take a required `expect: { vaultId, assetId, version }`. Compare hex case-insensitively (normalise to lowercase).
 - sealAsset and rekeyAsset reject duplicate encPk across all participants (guardians and beneficiaries), as well as duplicate keyIds.
 - Document in specs/crypto.md: (a) ciphertext length leaks the plaintext length class; (b) rekey does not protect against an old beneficiary plus t old guardians who kept the old bundle; unpinning the old CID is the only defence.
+
+D16 P256 Auth encoding
+For AuthKind.P256, Auth.signer is unused (zero) and Auth.sig = abi.encode(bytes32 qx, bytes32 qy, bytes authenticatorData, string clientDataJSON, bytes32 r, bytes32 s). The challenge in clientDataJSON is the D2 EIP-712 digest. No ABI change.
