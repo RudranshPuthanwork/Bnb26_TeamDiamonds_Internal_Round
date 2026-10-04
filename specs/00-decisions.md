@@ -25,3 +25,12 @@ D14 Amendments from review 1c (override D3/D4/D5/D8 where they conflict)
 - Constructor: 1 ≤ TIME_UNIT ≤ 30 days.
 - setAbsence: at most 365 units; setAbsence(0) clears it.
 - markClaimed requires at least one submitted share for that claimant.
+
+D15 Amendments from review 2b
+- Base64url encode in chunks or with a loop; no spread of large buffers. Must handle at least 50 MB.
+- The rng parameter is removed from the public API. Test injection lives in a separate entry point, packages/crypto/src/testing.ts, exported as "@heirloom/crypto/testing" and never imported by apps or services.
+- beneficiaryReconstruct: mark an index "seen" only after its commitment check passes. Require 2 <= t <= commitments.length. Put combine inside the try and surface failure as a ReconstructError with the rejected list.
+- commit() asserts share is 33 bytes and salt is 32 bytes.
+- beneficiaryReconstruct and drillCheck take a required `expect: { vaultId, assetId, version }`. Compare hex case-insensitively (normalise to lowercase).
+- sealAsset and rekeyAsset reject duplicate encPk across all participants (guardians and beneficiaries), as well as duplicate keyIds.
+- Document in specs/crypto.md: (a) ciphertext length leaks the plaintext length class; (b) rekey does not protect against an old beneficiary plus t old guardians who kept the old bundle; unpinning the old CID is the only defence.
